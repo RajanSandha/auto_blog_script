@@ -45,7 +45,7 @@ class PostGenerator:
     
     def create_post(self, content_data: Dict[str, Any], image_path: Optional[str] = None) -> Optional[str]:
         """
-        Create a Jekyll-compatible blog post from AI-generated content.
+        Create a Jekyll-compatible blog post for al-folio theme.
         
         Args:
             content_data: Dictionary containing the generated content and metadata
@@ -72,7 +72,7 @@ class PostGenerator:
             date_str = date.strftime('%Y-%m-%d')
             time_str = date.strftime('%H:%M:%S %z')
             slug = self._generate_slug(title)
-            filename = f"{date_str}-{slug}.md"
+            filename = f"{date_str}-{slug}.md"  # al-folio uses .md extension
             filepath = os.path.join(self.posts_dir, filename)
             
             # Prepare relative image path if an image is provided
@@ -80,35 +80,49 @@ class PostGenerator:
             if image_path:
                 # Get image path relative to the Jekyll site root
                 image_name = os.path.basename(image_path)
-                # Use the relative path format that works with baseurl configuration
-                image_relative_path = f"/{self.image_dir}/{image_name}"
-                # Note: Jekyll's liquid templating will handle proper URL construction with baseurl
+                # al-folio typically uses /assets/img/ for images
+                image_relative_path = f"/assets/img/{image_name}"
+                
+                # Make sure the image is copied to assets/img directory
+                assets_img_dir = os.path.join(os.path.dirname(self.posts_dir), "assets/img")
+                os.makedirs(assets_img_dir, exist_ok=True)
+                
+                # Copy the image to assets/img directory
+                import shutil
+                target_img_path = os.path.join(assets_img_dir, image_name)
+                if not os.path.exists(target_img_path):
+                    shutil.copy(image_path, target_img_path)
+                    logger.info(f"Copied image to al-folio assets/img directory: {image_name}")
             
             # Select categories and tags
             categories = self._select_categories()
             final_tags = self._process_tags(tags)
             
-            # Prepare front matter
+            # al-folio uses a slightly different front matter structure
             front_matter = {
                 'layout': 'post',
                 'title': title,
                 'date': f"{date_str} {time_str}",
-                'author': self.author_name,
-                'categories': categories,
+                'description': description or f"Summary of {title}",  # al-folio requires description
                 'tags': final_tags,
-                'description': description,
             }
             
-            # Add featured image if available
+            # Add categories if available
+            if categories:
+                front_matter['categories'] = categories
+                
+            # Add featured image if available (al-folio format)
             if image_relative_path:
-                front_matter['image'] = image_relative_path
+                front_matter['thumbnail'] = image_relative_path
+                # Also add it in the content for better visibility
+                image_markdown = f"\n\n![{title}]({image_relative_path})\n\n"
+                content = image_markdown + content
             
             # Add source attribution
             if source_url and source_name:
-                front_matter['source'] = {
-                    'name': source_name,
-                    'url': source_url
-                }
+                # Add source attribution to the content
+                source_attribution = f"\n\n*Source: [{source_name}]({source_url})*\n"
+                content += source_attribution
             
             # Convert front matter to YAML
             front_matter_yaml = yaml.dump(front_matter, default_flow_style=False)
@@ -120,7 +134,7 @@ class PostGenerator:
             with open(filepath, 'w', encoding='utf-8') as f:
                 f.write(full_content)
             
-            logger.info(f"Created Jekyll post at {filepath}")
+            logger.info(f"Created al-folio post at {filepath}")
             return filepath
         
         except Exception as e:

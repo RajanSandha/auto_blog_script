@@ -11,6 +11,10 @@ import logging
 import time
 import random
 from bs4 import BeautifulSoup
+import signal
+import threading
+import platform
+import functools
 
 # Set up logging
 logging.basicConfig(
@@ -44,7 +48,9 @@ class RSSFetcher:
     """
     
     def __init__(self, rss_urls: List[str], max_items_per_feed: int = 25, 
-                 max_age_days: int = 3, user_agent: Optional[str] = None):
+                 max_age_days: int = 3, user_agent: Optional[str] = None,
+                 feed_timeout: int = 15, article_timeout: int = 8,
+                 known_problematic_feeds: List[str] = None):
         """
         Initialize the RSS Fetcher.
         
@@ -53,11 +59,63 @@ class RSSFetcher:
             max_items_per_feed: Maximum number of items to fetch per feed
             max_age_days: Only fetch items published within this many days
             user_agent: Custom user agent string for HTTP requests
+            feed_timeout: Timeout in seconds for RSS feed fetching (default: 15)
+            article_timeout: Timeout in seconds for article content fetching (default: 8)
+            known_problematic_feeds: List of feed URLs known to cause timeouts (can be pattern matching)
         """
         self.rss_urls = rss_urls
         self.max_items_per_feed = max_items_per_feed
         self.max_age_days = max_age_days
         self.user_agent = user_agent or "AutoBlogger/1.0"
+        self.feed_timeout = feed_timeout
+        self.article_timeout = article_timeout
+        
+        # Keep track of problematic feeds
+        self.problematic_feeds = known_problematic_feeds or []
+        # Add common known problematic feeds if not explicitly provided
+        if known_problematic_feeds is None:
+            self.problematic_feeds = ['wired.com']  # Add others as you identify them
+        
+        # A dictionary to keep track of feed timeout occurrences
+        self.feed_timeout_count = {}
+        # After this many consecutive timeouts, a feed will be added to problematic_feeds
+        self.max_consecutive_timeouts = 2
+        
+    # Timeout handler for feed parsing
+    def _timeout_handler(self, signum, frame):
+        """Handler for timeout signal."""
+        raise TimeoutError(f"Timed out after {self.feed_timeout} seconds")
+    
+    # Thread-based timeout for platforms where signals don't work well
+    def _timeout_wrapper(self, func, *args, **kwargs):
+        """Wrapper for functions with timeout using threading (cross-platform)."""
+        result = [None]
+        error = [None]
+        completed = [False]
+        
+        def target():
+            try:
+                result[0] = func(*args, **kwargs)
+                completed[0] = True
+            except Exception as e:
+                error[0] = e
+        
+        thread = threading.Thread(target=target)
+        thread.daemon = True
+        thread.start()
+        thread.join(self.feed_timeout)
+        
+        if not completed[0]:
+            raise TimeoutError(f"Timed out after {self.feed_timeout} seconds")
+        
+        if error[0]:
+            raise error[0]
+            
+        return result[0]
+        
+    def _is_problematic_feed(self, url: str) -> bool:
+        """Check if a feed URL matches any known problematic feed patterns."""
+        return any(problem in url for problem in self.problematic_feeds)
         
     def fetch_all_feeds(self) -> List[RSSItem]:
         """
@@ -73,6 +131,11 @@ class RSSFetcher:
             if not url.strip():
                 continue
                 
+            # Skip known problematic feeds
+            if self._is_problematic_feed(url):
+                logger.warning(f"Skipping known problematic feed: {url}")
+                continue
+                
             # Try to fetch the feed with retries
             max_retries = 3
             retry_delay = 2  # seconds
@@ -81,9 +144,26 @@ class RSSFetcher:
                 try:
                     items = self.fetch_feed(url)
                     all_items.extend(items)
+                    
+                    # Reset timeout count on success
+                    if url in self.feed_timeout_count:
+                        del self.feed_timeout_count[url]
+                    
                     # Add a random delay between requests to be respectful to servers
                     time.sleep(random.uniform(1.0, 3.0))
                     break  # Success, break retry loop
+                except TimeoutError as te:
+                    # Track consecutive timeouts
+                    self.feed_timeout_count[url] = self.feed_timeout_count.get(url, 0) + 1
+                    
+                    if self.feed_timeout_count[url] >= self.max_consecutive_timeouts:
+                        # After multiple timeouts, add to problematic feeds list
+                        if url not in self.problematic_feeds:
+                            logger.error(f"Adding {url} to problematic feeds list after {self.feed_timeout_count[url]} consecutive timeouts")
+                            self.problematic_feeds.append(url)
+                    
+                    logger.warning(f"Timeout fetching feed {url} - skipping after {self.feed_timeout} seconds")
+                    break  # Don't retry on timeout, just skip this feed
                 except Exception as e:
                     if attempt < max_retries:
                         logger.warning(f"Error fetching feed {url} (attempt {attempt}/{max_retries}): {str(e)}")
@@ -109,8 +189,35 @@ class RSSFetcher:
         logger.info(f"Fetching RSS feed: {url}")
         
         try:
-            # Parse the feed
-            feed = feedparser.parse(url)
+            # Different timeout approach based on platform
+            is_windows = platform.system().lower() == 'windows'
+            
+            if is_windows:
+                # Use threading-based timeout on Windows
+                try:
+                    feed = self._timeout_wrapper(feedparser.parse, url)
+                except TimeoutError:
+                    logger.warning(f"Timeout parsing feed {url} after {self.feed_timeout} seconds")
+                    raise
+            else:
+                # Set up a timeout using signal on Unix-like platforms
+                old_handler = signal.signal(signal.SIGALRM, self._timeout_handler)
+                signal.alarm(self.feed_timeout)
+                
+                try:
+                    # Parse the feed with timeout
+                    feed = feedparser.parse(url)
+                    
+                    # Disable the alarm
+                    signal.alarm(0)
+                except TimeoutError:
+                    logger.warning(f"Timeout parsing feed {url} after {self.feed_timeout} seconds")
+                    raise
+                finally:
+                    # Restore the original signal handler
+                    signal.signal(signal.SIGALRM, old_handler)
+                    # Disable the alarm in case of exception before the previous disable
+                    signal.alarm(0)
             
             # Check if the feed was successfully parsed
             if hasattr(feed, 'bozo_exception') and feed.bozo_exception:
@@ -151,6 +258,8 @@ class RSSFetcher:
                                 content = self._fetch_article_content(link)
                             else:
                                 logger.warning(f"No link found for entry {entry_index} in feed {url}")
+                        except TimeoutError:
+                            logger.warning(f"Timeout fetching article content for entry {entry_index} in feed {url}")
                         except Exception as content_error:
                             logger.error(f"Error fetching content for entry {entry_index} from {url}: {str(content_error)}")
                     
@@ -171,10 +280,13 @@ class RSSFetcher:
                 except Exception as entry_error:
                     logger.error(f"Error processing entry {entry_index} from feed {url}: {str(entry_error)}")
                     continue
-                
+            
             logger.info(f"Fetched {len(items)} items from {url}")
             return items
-            
+                
+        except TimeoutError:
+            # Re-raise to be handled by fetch_all_feeds
+            raise
         except Exception as e:
             logger.error(f"Error fetching feed {url}: {str(e)}")
             return []
@@ -345,58 +457,62 @@ class RSSFetcher:
             return ""
             
         try:
+            # Use the requests library with explicit timeout
             headers = {'User-Agent': self.user_agent}
-            # Use a shorter timeout to avoid hanging on slow sites
-            response = requests.get(url, headers=headers, timeout=8)
-            response.raise_for_status()
             
-            # Parse the HTML
-            soup = BeautifulSoup(response.text, 'lxml')
+            try:
+                # First, try using the requests timeout
+                response = requests.get(url, headers=headers, timeout=self.article_timeout)
+                response.raise_for_status()
+                
+                # Parse the HTML
+                soup = BeautifulSoup(response.text, 'lxml')
+                
+                # Remove unwanted elements (common ads, nav, etc.)
+                for unwanted in soup.select('script, style, nav, header, footer, .ad, .ads, .advertisement'):
+                    try:
+                        unwanted.decompose()
+                    except Exception:
+                        pass  # Ignore errors when removing elements
+                
+                # Look for article content in common article containers
+                article_selectors = [
+                    'article', '.post-content', '.entry-content', '.article-content',
+                    '.post-body', '.article-body', '.story-body', '.story',
+                    '.content', 'main', '#content', '#main'
+                ]
+                
+                content = ""
+                for selector in article_selectors:
+                    try:
+                        article = soup.select_one(selector)
+                        if article:
+                            # Clean up the article text
+                            content = article.get_text(separator="\n", strip=True)
+                            # If we found substantial content, break
+                            if len(content) > 500:
+                                break
+                    except Exception as e:
+                        logger.debug(f"Error extracting content with selector '{selector}': {str(e)}")
+                        continue
+                
+                # If we still don't have enough content, just use the body
+                if len(content) < 500:
+                    try:
+                        if soup.body:
+                            content = soup.body.get_text(separator="\n", strip=True)
+                    except Exception as e:
+                        logger.debug(f"Error extracting content from body: {str(e)}")
+                
+                return content
             
-            # Remove unwanted elements (common ads, nav, etc.)
-            for unwanted in soup.select('script, style, nav, header, footer, .ad, .ads, .advertisement'):
-                try:
-                    unwanted.decompose()
-                except Exception:
-                    pass  # Ignore errors when removing elements
-            
-            # Look for article content in common article containers
-            article_selectors = [
-                'article', '.post-content', '.entry-content', '.article-content',
-                '.post-body', '.article-body', '.story-body', '.story',
-                '.content', 'main', '#content', '#main'
-            ]
-            
-            content = ""
-            for selector in article_selectors:
-                try:
-                    article = soup.select_one(selector)
-                    if article:
-                        # Clean up the article text
-                        content = article.get_text(separator="\n", strip=True)
-                        # If we found substantial content, break
-                        if len(content) > 500:
-                            break
-                except Exception as e:
-                    logger.debug(f"Error extracting content with selector '{selector}': {str(e)}")
-                    continue
-            
-            # If we still don't have enough content, just use the body
-            if len(content) < 500:
-                try:
-                    if soup.body:
-                        content = soup.body.get_text(separator="\n", strip=True)
-                except Exception as e:
-                    logger.debug(f"Error extracting content from body: {str(e)}")
-            
-            return content
+            except requests.exceptions.Timeout:
+                logger.warning(f"Timeout fetching article content from {url} after {self.article_timeout} seconds")
+                return ""
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Request error fetching article content from {url}: {str(e)}")
+                return ""
         
-        except requests.exceptions.Timeout:
-            logger.warning(f"Timeout fetching article content from {url}")
-            return ""
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Request error fetching article content from {url}: {str(e)}")
-            return ""
         except Exception as e:
             logger.error(f"Error fetching article content from {url}: {str(e)}")
             return ""

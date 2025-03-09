@@ -76,7 +76,7 @@ def main():
         # Ensure Jekyll structure for GitHub Pages
         custom_domain = os.getenv('CUSTOM_DOMAIN', None)  # Add to .env if you have a custom domain
         if not github_manager.ensure_jekyll_structure(custom_domain):
-            logger.warning("Failed to ensure Jekyll structure, continuing anyway")
+            logger.warning("Failed to ensure al-folio structure, continuing anyway")
         
         if not github_manager.pull_latest_changes():
             logger.error("Failed to pull latest changes")
@@ -98,16 +98,17 @@ def main():
         )
         
         # Initialize image handler
-        # Images will be stored in the GitHub repo
-        image_dir = os.path.join(repo_dir, cfg['blog_image_path'])
+        # Images will be stored in the GitHub repo's assets/img directory for al-folio compatibility
+        image_dir = os.path.join(repo_dir, "assets/img")
+        os.makedirs(image_dir, exist_ok=True)
         image_handler = ImageHandler(image_dir=image_dir)
         
         # Initialize post generator
         post_generator = PostGenerator(
-            posts_dir=os.path.join(repo_dir, cfg['blog_post_path']),
+            posts_dir=os.path.join(repo_dir, "_posts"),
             site_url=cfg['site_url'],
             author_name=cfg['author_name'],
-            image_dir=cfg['blog_image_path'],  # Relative path for Jekyll
+            image_dir="assets/img",  # al-folio uses this path for images
             available_categories=cfg['jekyll_categories'],
             available_tags=cfg['jekyll_tags']
         )
