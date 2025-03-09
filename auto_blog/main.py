@@ -11,6 +11,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 import time
+from PIL import Image, ImageDraw, ImageFont
 
 # Import configuration
 from . import config
@@ -161,6 +162,66 @@ def main():
                 if image_path:
                     # Resize image if needed
                     image_handler.resize_image(image_path, max_width=800)
+            else:
+                # Ensure fallback image directory exists
+                fallback_dir = Path(__file__).parent / "assets" / "fallback_images"
+                if not fallback_dir.exists():
+                    os.makedirs(fallback_dir, exist_ok=True)
+                    logger.info(f"Created fallback images directory at {fallback_dir}")
+                
+                # Generic fallback image path
+                generic_fallback_path = fallback_dir / "generic_fallback.jpg"
+                
+                # Create a simple color image if the generic fallback doesn't exist
+                if not generic_fallback_path.exists():
+                    try:
+                        # Create a simple color image with text
+                        width, height = 800, 500
+                        image = Image.new('RGB', (width, height), color=(53, 59, 72))
+                        draw = ImageDraw.Draw(image)
+                        
+                        # Try to load a font, use default if not available
+                        try:
+                            # Try to find a system font
+                            font_size = 40
+                            try:
+                                font = ImageFont.truetype("Arial", font_size)
+                            except:
+                                # Try DejaVuSans on Linux
+                                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", font_size)
+                        except:
+                            # Use default if no system fonts found
+                            font = ImageFont.load_default()
+                        
+                        # Draw text
+                        text = "Tech News Blog"
+                        
+                        # Calculate text position (centered)
+                        # For newer Pillow versions that have textlength
+                        if hasattr(draw, 'textlength'):
+                            text_width = draw.textlength(text, font)
+                            text_position = ((width - text_width) / 2, height / 2 - 50)
+                        else:
+                            # For older Pillow versions
+                            text_width, text_height = draw.textsize(text, font)
+                            text_position = ((width - text_width) / 2, (height - text_height) / 2 - 50)
+                        
+                        draw.text(text_position, text, font=font, fill=(255, 255, 255))
+                        
+                        # Save the image
+                        image.save(generic_fallback_path)
+                        logger.info(f"Created generic fallback image at {generic_fallback_path}")
+                    except Exception as e:
+                        logger.error(f"Error creating fallback image: {str(e)}")
+                
+                # Use the generic fallback if it exists
+                if generic_fallback_path.exists():
+                    import shutil
+                    dest_filename = "fallback_generic.jpg"
+                    dest_path = os.path.join(image_dir, dest_filename)
+                    shutil.copy(generic_fallback_path, dest_path)
+                    image_path = dest_path
+                    logger.info("Using generic fallback image")
             
             # Create Jekyll post
             logger.info(f"Creating post for: {item.title}")

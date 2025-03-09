@@ -80,7 +80,9 @@ class PostGenerator:
             if image_path:
                 # Get image path relative to the Jekyll site root
                 image_name = os.path.basename(image_path)
+                # Use the relative path format that works with baseurl configuration
                 image_relative_path = f"/{self.image_dir}/{image_name}"
+                # Note: Jekyll's liquid templating will handle proper URL construction with baseurl
             
             # Select categories and tags
             categories = self._select_categories()

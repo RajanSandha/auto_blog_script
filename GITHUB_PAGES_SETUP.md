@@ -124,6 +124,34 @@ DNS changes and GitHub Pages setup can take up to 24 hours to fully propagate.
 
 ## Troubleshooting
 
-- If your site isn't building, check the "Actions" tab in your GitHub repository for build errors
-- Make sure your repository has the correct Jekyll structure (the auto blog system should set this up for you)
-- Ensure the Jekyll build is completing successfully by checking the GitHub Pages section in repository settings 
+### Common Issues
+
+- **CSS Not Loading**: If your site's CSS isn't loading, check the `baseurl` setting in `_config.yml`. It should be empty for user sites (`username.github.io`) or set to `/repository-name` for project sites.
+
+- **Posts Not Displaying**: If your posts aren't appearing on the home page, check that:
+  1. The posts are in the `_posts` directory with the correct filename format (`YYYY-MM-DD-title.md`)
+  2. The front matter in each post has `layout: post`
+  3. Your `index.html` has the proper liquid tags to display posts (our system should set this up correctly)
+
+- **Images Not Displaying**: Ensure image paths in post content use the `relative_url` filter: `{{ "/path/to/image.jpg" | relative_url }}` rather than absolute paths starting with `/`.
+
+- **Build Failures**: If your site isn't building, check the Actions tab in your GitHub repository for build errors. Common issues include:
+  - Syntax errors in front matter
+  - Invalid Liquid template tags
+  - Incompatible plugin usage
+
+### Verifying Your Setup
+
+To verify your Jekyll site is set up correctly:
+
+1. Make sure your repository has:
+   - A `_config.yml` file with proper settings
+   - An `index.html` file that lists posts
+   - A `_posts` directory containing posts
+   - Proper layouts in the `_layouts` directory
+
+2. Check the GitHub Pages settings in your repository's settings tab to ensure the correct branch is selected.
+
+3. Wait a few minutes after pushing changes - GitHub Pages can take some time to build and deploy your site.
+
+If you continue to have issues, you can run Jekyll locally to test your site before pushing to GitHub. See the [Jekyll documentation](https://jekyllrb.com/docs/) for instructions. 

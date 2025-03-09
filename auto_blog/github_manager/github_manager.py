@@ -119,6 +119,11 @@ description: Automated tech news blog powered by AI
 author: {self.github_username}
 email: {self.github_email}
 
+# URL settings
+url: "https://{self.github_username}.github.io" # the base hostname & protocol
+baseurl: ""  # subpath for project sites (e.g., "/repo-name" if not using a custom domain)
+              # leave empty for user/organization sites (username.github.io) or if using a custom domain
+
 # Theme settings
 theme: minima    # Choose one of: minima, jekyll-theme-cayman, jekyll-theme-minimal, jekyll-theme-hacker, jekyll-theme-slate, jekyll-theme-tactile
 # Uncomment the following line instead if you want to use a remote theme
@@ -169,6 +174,24 @@ exclude:
   - vendor
   - .git
 """)
+
+                # Determine if this is a project site (not username.github.io)
+                # and automatically set the baseurl if it is
+                if self.github_repo.lower() != f"{self.github_username.lower()}.github.io":
+                    logger.info("Project site detected - updating baseurl in _config.yml")
+                    with open(config_path, 'r') as f:
+                        config_content = f.read()
+                    
+                    # Replace the baseurl line
+                    config_content = config_content.replace(
+                        'baseurl: ""', 
+                        f'baseurl: "/{self.github_repo}"'
+                    )
+                    
+                    with open(config_path, 'w') as f:
+                        f.write(config_content)
+                    
+                    logger.info(f"Set baseurl: /{self.github_repo} in _config.yml")
             
             # Create Gemfile for Jekyll with GitHub Pages
             gemfile_path = repo_dir / "Gemfile"
@@ -225,11 +248,72 @@ gem "webrick", "~> 1.7"
                 logger.info("Creating style.scss for theme customization")
                 with open(style_scss_path, 'w') as f:
                     f.write("""---
+# Only the main Sass file needs front matter (the dashes are enough)
 ---
 
 @import "{{ site.theme }}";
 
-// Your custom styles go here
+// Custom styles
+.home .post-preview {
+  margin-bottom: 2rem;
+  padding-bottom: 2rem;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.home .post-preview:last-child {
+  border-bottom: none;
+}
+
+.home .post-preview h2 {
+  margin-top: 0;
+}
+
+.preview-image img {
+  max-width: 100%;
+  height: auto;
+  margin: 1rem 0;
+  border-radius: 4px;
+}
+
+.post-meta {
+  color: #828282;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.post-meta .author {
+  margin-left: 0.5rem;
+}
+
+.read-more {
+  display: inline-block;
+  margin-top: 0.5rem;
+  font-weight: bold;
+}
+
+.pagination {
+  margin-top: 2rem;
+  text-align: center;
+}
+
+.all-posts {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  background-color: #2a7ae2;
+  color: white;
+  border-radius: 3px;
+  text-decoration: none;
+}
+
+.all-posts:hover {
+  background-color: #1756a9;
+  text-decoration: none;
+}
+
+.no-posts {
+  font-style: italic;
+  color: #828282;
+}
 """)
             
             # Create default layout if it doesn't exist
@@ -293,7 +377,7 @@ layout: default
       • <span class="categories">
         Categories: 
         {% for category in page.categories %}
-        <a href="/categories/{{ category | slugify }}/">{{ category }}</a>{% if forloop.last == false %}, {% endif %}
+        <a href="{{ '/categories/' | append: category | slugify | append: '/' | relative_url }}">{{ category }}</a>{% if forloop.last == false %}, {% endif %}
         {% endfor %}
       </span>
       {%- endif -%}
@@ -302,7 +386,7 @@ layout: default
 
   {%- if page.image -%}
   <div class="featured-image">
-    <img src="{{ page.image }}" alt="{{ page.title | escape }}" itemprop="image">
+    <img src="{{ page.image | relative_url }}" alt="{{ page.title | escape }}" itemprop="image">
   </div>
   {%- endif -%}
 
@@ -314,7 +398,7 @@ layout: default
   <div class="tags">
     Tags: 
     {% for tag in page.tags %}
-    <a href="/tags/{{ tag | slugify }}/">#{{ tag }}</a>{% if forloop.last == false %} {% endif %}
+    <a href="{{ '/tags/' | append: tag | slugify | append: '/' | relative_url }}">#{{ tag }}</a>{% if forloop.last == false %} {% endif %}
     {% endfor %}
   </div>
   {%- endif -%}
@@ -342,41 +426,50 @@ title: Home
   <h1 class="page-heading">Latest Articles</h1>
   
   <div class="post-list">
-    {% for post in site.posts limit:10 %}
-    <div class="post-preview">
-      <h2>
-        <a href="{{ post.url | relative_url }}">{{ post.title }}</a>
-      </h2>
-      
-      <div class="post-meta">
-        <span class="date">{{ post.date | date: "%B %d, %Y" }}</span>
-        {% if post.author %}
-        <span class="author">by {{ post.author }}</span>
-        {% endif %}
+    {%- if site.posts.size > 0 -%}
+      {%- for post in site.posts limit:10 -%}
+      <div class="post-preview">
+        <h2>
+          <a class="post-link" href="{{ post.url | relative_url }}">{{ post.title | escape }}</a>
+        </h2>
+        
+        <div class="post-meta">
+          <span class="date">
+            {%- assign date_format = site.minima.date_format | default: "%b %-d, %Y" -%}
+            {{ post.date | date: date_format }}
+          </span>
+          {%- if post.author -%}
+          <span class="author">by {{ post.author }}</span>
+          {%- endif -%}
+        </div>
+        
+        {%- if post.image -%}
+        <div class="preview-image">
+          <a href="{{ post.url | relative_url }}">
+            <img src="{{ post.image | relative_url }}" alt="{{ post.title | escape }}">
+          </a>
+        </div>
+        {%- endif -%}
+        
+        <div class="post-excerpt">
+          {%- if post.description -%}
+            {{ post.description | escape }}
+          {%- else -%}
+            {{ post.excerpt | strip_html | truncatewords: 50 }}
+          {%- endif -%}
+          <a href="{{ post.url | relative_url }}" class="read-more">Read more &raquo;</a>
+        </div>
       </div>
-      
-      {% if post.image %}
-      <div class="preview-image">
-        <a href="{{ post.url | relative_url }}">
-          <img src="{{ post.image }}" alt="{{ post.title }}">
-        </a>
+      {%- endfor -%}
+    
+      {%- if site.posts.size > 10 -%}
+      <div class="pagination">
+        <a href="{{ '/archive' | relative_url }}" class="all-posts">View All Posts</a>
       </div>
-      {% endif %}
-      
-      <div class="post-excerpt">
-        {% if post.description %}
-          {{ post.description }}
-        {% else %}
-          {{ post.excerpt | strip_html | truncatewords: 50 }}
-        {% endif %}
-        <a href="{{ post.url | relative_url }}" class="read-more">Read more &raquo;</a>
-      </div>
-    </div>
-    {% endfor %}
-  </div>
-  
-  <div class="pagination">
-    <a href="/archive" class="all-posts">View All Posts</a>
+      {%- endif -%}
+    {%- else -%}
+      <p class="no-posts">No posts yet! Check back soon.</p>
+    {%- endif -%}
   </div>
 </div>
 """)
@@ -394,19 +487,23 @@ title: Archive
 <div class="archive">
   <h1 class="page-heading">All Articles</h1>
   
-  {% assign postsByYear = site.posts | group_by_exp:"post", "post.date | date: '%Y'" %}
-  
-  {% for year in postsByYear %}
-  <h2 class="year-heading">{{ year.name }}</h2>
-  <ul class="post-list">
-    {% for post in year.items %}
-    <li>
-      <span class="post-date">{{ post.date | date: "%b %d" }}</span>
-      <a href="{{ post.url | relative_url }}">{{ post.title }}</a>
-    </li>
+  {%- if site.posts.size > 0 -%}
+    {% assign postsByYear = site.posts | group_by_exp:"post", "post.date | date: '%Y'" %}
+    
+    {% for year in postsByYear %}
+    <h2 class="year-heading">{{ year.name }}</h2>
+    <ul class="post-list">
+      {% for post in year.items %}
+      <li>
+        <span class="post-date">{{ post.date | date: "%b %-d" }}</span>
+        <a class="post-link" href="{{ post.url | relative_url }}">{{ post.title | escape }}</a>
+      </li>
+      {% endfor %}
+    </ul>
     {% endfor %}
-  </ul>
-  {% endfor %}
+  {%- else -%}
+    <p>No posts yet! Check back soon.</p>
+  {%- endif -%}
 </div>
 """)
             
