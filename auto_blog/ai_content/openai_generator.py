@@ -24,7 +24,7 @@ class OpenAIGenerator(AIGenerator):
             api_key: OpenAI API key
             model: OpenAI model to use (defaults to gpt-3.5-turbo)
         """
-        # Set API key directly instead of creating a client to avoid compatibility issues
+        # Set API key for v0.28.0
         openai.api_key = api_key
         self.model = model or "gpt-3.5-turbo"
         logger.info(f"Initialized OpenAI generator with model: {self.model}")
@@ -101,7 +101,7 @@ class OpenAIGenerator(AIGenerator):
         """
         
         try:
-            # Using the openai module's ChatCompletion API directly
+            # Call OpenAI API (compatible with v0.28.0)
             response = openai.ChatCompletion.create(
                 model=self.model,
                 messages=[
@@ -112,7 +112,7 @@ class OpenAIGenerator(AIGenerator):
                 max_tokens=2500,  # Adjust based on model and content needs
             )
             
-            # Extract and parse the response
+            # Extract the response content
             content = response.choices[0].message.content
             
             # Try to parse as JSON, but handle cases where the response might not be valid JSON

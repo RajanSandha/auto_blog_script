@@ -72,6 +72,11 @@ def main():
             logger.error("Failed to ensure repository exists")
             sys.exit(1)
         
+        # Ensure Jekyll structure for GitHub Pages
+        custom_domain = os.getenv('CUSTOM_DOMAIN', None)  # Add to .env if you have a custom domain
+        if not github_manager.ensure_jekyll_structure(custom_domain):
+            logger.warning("Failed to ensure Jekyll structure, continuing anyway")
+        
         if not github_manager.pull_latest_changes():
             logger.error("Failed to pull latest changes")
             sys.exit(1)
