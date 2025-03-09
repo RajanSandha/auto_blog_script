@@ -1,0 +1,8 @@
+# Example crontab entry to run the auto_blog system daily at 8:00 AM
+# To install: crontab -e and paste this line
+
+# Option 1: Using the run.py script (recommended)
+0 8 * * * cd /path/to/auto_blog && ./run.py >> logs/cron.log 2>&1
+
+# Option 2: Using the virtual environment directly
+# 0 8 * * * cd /path/to/auto_blog && /path/to/auto_blog/venv/bin/python run_autoblog.py >> logs/cron.log 2>&1 
