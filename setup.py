@@ -2,6 +2,7 @@
 """
 Setup script for the auto_blog system.
 Creates a virtual environment and installs all dependencies.
+Clones the minimal-mistakes Jekyll theme for GitHub Pages.
 """
 
 import os
@@ -10,11 +11,34 @@ import subprocess
 import platform
 import shutil
 from pathlib import Path
+import urllib.request
+
+# Check Python version
+if sys.version_info < (3, 6):
+    print("Error: This script requires Python 3.6 or higher.")
+    print(f"Current Python version: {sys.version}")
+    sys.exit(1)
+
+def check_venv_module():
+    """Check if the venv module is available."""
+    try:
+        import venv
+        return True
+    except ImportError:
+        return False
 
 def main():
     # Determine the project root directory
     project_root = Path(__file__).resolve().parent
     venv_dir = project_root / "venv"
+    
+    # Detect system and Python details for logging
+    system_info = f"System: {platform.system()} {platform.release()}"
+    python_info = f"Python: {platform.python_version()} at {sys.executable}"
+    print(f"\nSystem Information:")
+    print(f"  {system_info}")
+    print(f"  {python_info}")
+    print(f"  venv module available: {check_venv_module()}\n")
     
     # Check if virtual environment already exists
     if venv_dir.exists():
@@ -34,9 +58,20 @@ def main():
     # Method 1: Try using venv module directly
     try:
         print("Trying to create venv using built-in venv module...")
-        subprocess.run([sys.executable, "-m", "venv", str(venv_dir)], check=True)
+        # Get the Python major and minor version
+        python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
+        print(f"Using Python version: {python_version}")
+        
+        # Check for specific Python version
+        python3_path = f"/usr/bin/python{python_version}"
+        if os.path.exists(python3_path):
+            print(f"Found Python at {python3_path}, using it to create venv")
+            subprocess.run([python3_path, "-m", "venv", str(venv_dir)], check=True)
+        else:
+            # Use system executable
+            subprocess.run([sys.executable, "-m", "venv", str(venv_dir)], check=True)
         print("Virtual environment created successfully with venv module.")
-    except subprocess.CalledProcessError as e:
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
         print(f"Error creating virtual environment with venv: {e}")
         print("Trying alternative method...")
         
@@ -48,75 +83,169 @@ def main():
                 virtualenv_installed = True
             except (subprocess.CalledProcessError, FileNotFoundError):
                 virtualenv_installed = False
-                
-            if not virtualenv_installed:
-                print("virtualenv not found. Attempting to install virtualenv...")
-                subprocess.run([sys.executable, "-m", "pip", "install", "virtualenv"], check=True)
-                print("virtualenv installed successfully.")
-                
-            # Create virtual environment using virtualenv
-            print("Creating virtual environment using virtualenv...")
-            subprocess.run(["virtualenv", str(venv_dir)], check=True)
-            print("Virtual environment created successfully with virtualenv.")
-        except Exception as ve:
-            print(f"Error creating virtual environment with virtualenv: {ve}")
             
-            # Method 3: Try creating it manually
+            # If not installed, try to install it
+            if not virtualenv_installed:
+                print("Installing virtualenv...")
+                try:
+                    subprocess.run([sys.executable, "-m", "pip", "install", "virtualenv"], check=True)
+                    virtualenv_installed = True
+                except subprocess.CalledProcessError as pip_error:
+                    print(f"Error installing virtualenv: {pip_error}")
+                    virtualenv_installed = False
+            
+            # Use virtualenv if installed
+            if virtualenv_installed:
+                print("Trying to create venv using virtualenv...")
+                try:
+                    subprocess.run(["virtualenv", str(venv_dir)], check=True)
+                    print("Virtual environment created successfully with virtualenv.")
+                except subprocess.CalledProcessError as ve_error:
+                    print(f"Error creating virtual environment with virtualenv: {ve_error}")
+                    raise
+            else:
+                raise RuntimeError("virtualenv is not available")
+                
+        except Exception as alt_error:
+            print(f"Error with alternative method: {alt_error}")
+            print("Trying method 3: direct virtualenv command...")
+            
+            # Method 3: Try using direct virtualenv command
             try:
-                print("Trying to create venv structure manually...")
-                os.makedirs(venv_dir, exist_ok=True)
-                bin_dir = venv_dir / ('Scripts' if platform.system() == 'Windows' else 'bin')
-                os.makedirs(bin_dir, exist_ok=True)
+                virtualenv_paths = [
+                    "virtualenv",
+                    "/usr/local/bin/virtualenv",
+                    "/usr/bin/virtualenv",
+                    f"{os.path.dirname(sys.executable)}/virtualenv"
+                ]
                 
-                # Create a symbolic link to python or copy the python executable
-                python_exec = sys.executable
-                print(f"Using Python executable from: {python_exec}")
+                for virtualenv_path in virtualenv_paths:
+                    try:
+                        print(f"Trying virtualenv at {virtualenv_path}...")
+                        subprocess.run([virtualenv_path, str(venv_dir)], check=True)
+                        print(f"Virtual environment created successfully with {virtualenv_path}")
+                        break
+                    except (subprocess.CalledProcessError, FileNotFoundError):
+                        continue
+                else:  # This runs if the loop completes without breaking
+                    raise RuntimeError("All virtualenv paths failed")
+                    
+            except Exception as direct_ve_error:
+                print(f"Error with direct virtualenv command: {direct_ve_error}")
+                print("Trying method 4: create manually...")
                 
-                if platform.system() == 'Windows':
-                    target_python = bin_dir / 'python.exe'
-                    # On Windows, copy the Python executable
-                    shutil.copy(python_exec, target_python)
-                else:
-                    target_python = bin_dir / 'python'
-                    # On Unix, create a symbolic link
-                    if not target_python.exists():
-                        os.symlink(python_exec, target_python)
+                # Method 4: Try creating it manually
+                try:
+                    print("Trying to create venv structure manually...")
+                    os.makedirs(venv_dir, exist_ok=True)
+                    bin_dir = venv_dir / ('Scripts' if platform.system() == 'Windows' else 'bin')
+                    os.makedirs(bin_dir, exist_ok=True)
+                    
+                    # Create a symbolic link to python or copy the python executable
+                    python_exec = sys.executable
+                    print(f"Using Python executable from: {python_exec}")
+                    
+                    if platform.system() == 'Windows':
+                        target_python = bin_dir / 'python.exe'
+                        # On Windows, copy the Python executable
+                        shutil.copy(python_exec, target_python)
+                    else:
+                        target_python = bin_dir / 'python'
+                        # On Unix, create a symbolic link
+                        if not target_python.exists():
+                            os.symlink(python_exec, target_python)
+                            
+                    # Create python3 symlink on Unix systems
+                    if platform.system() != 'Windows':
+                        # Get the actual executable name that should be used for python3
+                        python_exec = sys.executable
+                        python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
                         
-                # Create python3 symlink on Unix systems
-                if platform.system() != 'Windows':
-                    target_python3 = bin_dir / 'python3'
-                    if not target_python3.exists():
-                        os.symlink(python_exec, target_python3)
-                
-                print("Created virtual environment structure manually.")
-                
-                # Install pip in the virtual environment
-                print("Installing pip in the virtual environment...")
-                get_pip_url = "https://bootstrap.pypa.io/get-pip.py"
-                get_pip_script = venv_dir / "get-pip.py"
-                
-                # Download get-pip.py
-                import urllib.request
-                urllib.request.urlretrieve(get_pip_url, get_pip_script)
-                
-                # Run get-pip.py with the virtual environment's Python
-                subprocess.run([str(target_python), str(get_pip_script)], check=True)
-                
-                print("pip installed in the virtual environment.")
-                
-            except Exception as me:
-                print(f"Error creating virtual environment manually: {me}")
-                print("\nTips to resolve this issue:")
-                print("1. Try installing virtualenv: pip install virtualenv")
-                print("2. Try using the alternative setup script: ./setup_alt.py")
-                print("3. Create a virtual environment manually:")
-                print("   python -m venv venv  # or")
-                print("   virtualenv venv")
-                print("4. Check your Python installation for any issues")
-                sys.exit(1)
-    except Exception as e:
-        print(f"Error creating virtual environment: {e}")
-        sys.exit(1)
+                        # Try finding the Python executable at various possible locations
+                        potential_pythons = [
+                            python_exec,
+                            f"/usr/bin/python{python_version}",
+                            "/usr/bin/python3",
+                            f"/usr/local/bin/python{python_version}",
+                            "/usr/local/bin/python3"
+                        ]
+                        
+                        print(f"Looking for Python executable at possible locations...")
+                        python_found = None
+                        for potential_python in potential_pythons:
+                            if os.path.exists(potential_python):
+                                python_found = potential_python
+                                print(f"Using Python from: {python_found}")
+                                break
+                        
+                        if python_found:
+                            target_python = bin_dir / 'python'
+                            target_python3 = bin_dir / 'python3'
+                            
+                            # Create symlinks for both python and python3
+                            if not target_python.exists():
+                                print(f"Creating symlink from {python_found} to {target_python}")
+                                os.symlink(python_found, target_python)
+                                
+                            if not target_python3.exists():
+                                print(f"Creating symlink from {python_found} to {target_python3}")
+                                os.symlink(python_found, target_python3)
+                        else:
+                            print("Warning: Could not find a suitable Python executable for symlinks")
+                            print("Attempting to copy the system executable instead")
+                            
+                            # Last resort: Try to copy the executable
+                            try:
+                                shutil.copy(sys.executable, bin_dir / 'python')
+                                shutil.copy(sys.executable, bin_dir / 'python3')
+                            except Exception as copy_error:
+                                print(f"Error copying Python executable: {copy_error}")
+                                print("You may need to manually create the Python symlinks")
+                    
+                    print("Created virtual environment structure manually.")
+                    
+                    # Install pip in the virtual environment
+                    print("Installing pip in the virtual environment...")
+                    get_pip_url = "https://bootstrap.pypa.io/get-pip.py"
+                    get_pip_script = venv_dir / "get-pip.py"
+                    
+                    # Download get-pip.py
+                    urllib.request.urlretrieve(get_pip_url, get_pip_script)
+                    
+                    # Run get-pip.py with the virtual environment's Python
+                    subprocess.run([str(target_python), str(get_pip_script)], check=True)
+                    
+                    print("Successfully installed pip in the virtual environment.")
+                    
+                except Exception as manual_error:
+                    print(f"Error creating virtual environment manually: {manual_error}")
+                    print("\nVirtual environment creation failed through all methods.")
+                    print("\n" + "="*80)
+                    print("TROUBLESHOOTING GUIDE")
+                    print("="*80)
+                    print("1. Install the Python venv module on your system:")
+                    print("   - For Debian/Ubuntu: sudo apt-get install python3-venv")
+                    print("   - For Red Hat/Fedora: sudo dnf install python3-libs")
+                    print("   - For Arch Linux: pacman -S python-virtualenv")
+                    print("\n2. Try installing virtualenv and running it directly:")
+                    print("   pip install virtualenv")
+                    print("   virtualenv venv")
+                    print("\n3. If you continue to have issues, create the virtual environment manually:")
+                    print("   python3 -m venv venv")
+                    print("   # OR")
+                    print("   virtualenv venv")
+                    print("\n4. Then install dependencies manually:")
+                    print("   venv/bin/pip install -r requirements.txt  # On Linux/Mac")
+                    print("   venv\\Scripts\\pip install -r requirements.txt  # On Windows")
+                    print("\n5. You can also try with the system Python directly:")
+                    print(f"   {sys.executable} -m pip install -r requirements.txt")
+                    print("\nError details:")
+                    print(f"   {manual_error}")
+                    print("="*80)
+                    sys.exit(1)
+    
+    # Create activation scripts for convenience
+    create_activation_scripts(project_root, venv_dir)
     
     activate_and_setup(project_root, venv_dir)
 
@@ -150,87 +279,197 @@ def activate_and_setup(project_root, venv_dir):
         print("Dependencies installed successfully.")
     except subprocess.CalledProcessError as e:
         print(f"Error installing dependencies: {e}")
+        print("\nFailed to install dependencies. You can try installing them manually:")
+        print(f"  {pip_path} install -r {requirements_file}")
+        print("\nOr install packages one by one if you encounter issues with specific packages.")
+        print("Sometimes, installing with the --no-cache-dir option can help:")
+        print(f"  {pip_path} install --no-cache-dir -r {requirements_file}")
         sys.exit(1)
     
-    # Clone al-folio repository
+    # Clone minimal-mistakes repository
     github_repo_dir = project_root / "github_repo"
     if not github_repo_dir.exists():
-        print("\nCloning al-folio Jekyll theme repository...")
+        print("\nCloning minimal-mistakes Jekyll theme repository...")
         try:
-            import git
-            git.Repo.clone_from("https://github.com/alshedivat/al-folio.git", str(github_repo_dir))
-            print("Successfully cloned al-folio repository.")
+            # Use subprocess to call git directly instead of GitPython
+            print("Using system git to clone repository...")
             
-            # Remove .git directory to disconnect from original repository
-            git_dir = github_repo_dir / ".git"
-            if git_dir.exists():
-                import shutil
-                shutil.rmtree(git_dir)
-                print("Removed .git directory from the cloned repository.")
+            # First check if git is available
+            try:
+                subprocess.run(["git", "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+                git_available = True
+            except (subprocess.CalledProcessError, FileNotFoundError) as git_check_err:
+                git_available = False
+                print(f"Git not available or not in PATH: {git_check_err}")
+            
+            if git_available:
+                # Clone the repository using git directly
+                subprocess.run(["git", "clone", "https://github.com/mmistakes/minimal-mistakes.git", str(github_repo_dir)], check=True)
+                print("Successfully cloned minimal-mistakes repository.")
+                
+                # Remove .git directory to disconnect from original repository
+                git_dir = github_repo_dir / ".git"
+                if git_dir.exists():
+                    shutil.rmtree(git_dir)
+                    print("Removed .git directory from the cloned repository.")
+                
+                # Initialize new git repository
+                subprocess.run(["git", "init"], cwd=str(github_repo_dir), check=True)
+                print("Initialized new git repository.")
+            else:
+                print("Git not available. Attempting to download ZIP file instead...")
+                try:
+                    # Download ZIP file directly
+                    zip_url = "https://github.com/mmistakes/minimal-mistakes/archive/refs/heads/master.zip"
+                    zip_path = project_root / "minimal-mistakes.zip"
+                    print(f"Downloading {zip_url}...")
+                    
+                    urllib.request.urlretrieve(zip_url, zip_path)
+                    print("Download complete. Extracting...")
+                    
+                    # Extract ZIP file
+                    import zipfile
+                    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                        # Extract to a temporary directory
+                        temp_dir = project_root / "temp_extract"
+                        zip_ref.extractall(temp_dir)
+                    
+                    # Rename the extracted directory
+                    extracted_dir = temp_dir / "minimal-mistakes-master"
+                    if extracted_dir.exists():
+                        # If github_repo_dir exists as a file (unlikely but possible), remove it
+                        if github_repo_dir.exists() and not github_repo_dir.is_dir():
+                            github_repo_dir.unlink()
+                            
+                        # Move the extracted directory to github_repo_dir
+                        if not github_repo_dir.exists():
+                            shutil.move(str(extracted_dir), str(github_repo_dir))
+                    
+                    # Clean up
+                    if zip_path.exists():
+                        zip_path.unlink()
+                    if temp_dir.exists() and temp_dir.is_dir():
+                        shutil.rmtree(temp_dir)
+                        
+                    print("Successfully extracted minimal-mistakes theme.")
+                except Exception as zip_error:
+                    print(f"Error downloading/extracting ZIP file: {zip_error}")
+                    raise RuntimeError("Could not clone or download the repository. Check your internet connection.")
+            
+            # Setup minimal-mistakes theme for use with GitHub Pages
+            print("\nSetting up minimal-mistakes theme for GitHub Pages...")
+            
+            # Remove directories and files not needed for GitHub Pages
+            print("Removing files and directories not needed for GitHub Pages...")
+            items_to_remove = [
+                ".editorconfig", ".gitattributes", ".github", "docs",
+                "test", "CHANGELOG.md", "minimal-mistakes-jekyll.gemspec",
+                "README.md", "screenshot.png", "screenshot-layouts.png", ".travis.yml"
+            ]
+            
+            for item in items_to_remove:
+                item_path = github_repo_dir / item
+                if item_path.exists():
+                    if item_path.is_dir():
+                        shutil.rmtree(item_path)
+                    else:
+                        os.remove(item_path)
+            
+            print("Creating necessary directories for blog posts and images...")
+            # Ensure _posts directory exists
+            posts_dir = github_repo_dir / "_posts"
+            posts_dir.mkdir(exist_ok=True)
+            
+            # Ensure assets/images directory exists for post images
+            images_dir = github_repo_dir / "assets" / "images"
+            images_dir.mkdir(parents=True, exist_ok=True)
+            
+            print("Setting up sample _config.yml file...")
+            # Copy starter _config.yml if it doesn't exist
+            config_yml = github_repo_dir / "_config.yml"
+            starter_config = github_repo_dir / "_config.yml"
+            
+            if not config_yml.exists() and starter_config.exists():
+                shutil.copy(str(starter_config), str(config_yml))
+                
+            print("Setup of minimal-mistakes theme completed successfully!")
+            
         except Exception as e:
-            print(f"Error cloning al-folio repository: {e}")
-            print("You'll need to clone it manually after completing setup:")
-            print("  git clone https://github.com/alshedivat/al-folio.git github_repo")
-            print("  rm -rf github_repo/.git")
+            print(f"\nError setting up minimal-mistakes repository: {e}")
+            print("\n" + "="*80)
+            print("MANUAL REPOSITORY SETUP INSTRUCTIONS")
+            print("="*80)
+            print("You can set up the repository manually by following these steps:")
+            print("\nOption 1: Using Git")
+            print("1. Clone the minimal-mistakes repository:")
+            print("   git clone https://github.com/mmistakes/minimal-mistakes.git github_repo")
+            print("2. Remove the .git directory from the cloned repository:")
+            print("   rm -rf github_repo/.git")
+            print("3. Initialize a new git repository:")
+            print("   cd github_repo")
+            print("   git init")
+            
+            print("\nOption 2: Download ZIP File")
+            print("1. Download the ZIP file from:")
+            print("   https://github.com/mmistakes/minimal-mistakes/archive/refs/heads/master.zip")
+            print("2. Extract the ZIP file and rename the directory to github_repo")
+
+            print("\nOption 3: Use the included manual_clone.sh script (Linux/Mac only):")
+            print("   chmod +x manual_clone.sh")
+            print("   ./manual_clone.sh")
+            
+            print("\nAfter setup:")
+            print("1. Create the following directories if they don't exist:")
+            print("   mkdir -p github_repo/_posts github_repo/assets/images")
+            print("2. Follow the minimal-mistakes setup documentation:")
+            print("   https://mmistakes.github.io/minimal-mistakes/docs/quick-start-guide/")
+            print("="*80)
     else:
-        print(f"\nFound existing directory at {github_repo_dir}")
-        print("Skipping al-folio repository cloning.")
-    
-    # Create activation scripts
-    create_activation_scripts(project_root, venv_dir)
+        print(f"\ngithub_repo directory already exists at {github_repo_dir}")
+        print("Using existing repository.")
     
     print("\nSetup completed successfully!")
-    print("\nTo activate the virtual environment:")
-    if is_windows:
-        print("    run_blog.bat")
-    else:
-        print("    source ./run_blog.sh")
-    print("\nTo run the auto blog system once the environment is activated:")
-    print("    python run_autoblog.py")
-    print("\nOr use the all-in-one run script:")
-    if is_windows:
-        print("    python run.py")
-    else:
-        print("    ./run.py")
-    
-    # Print al-folio specific instructions
-    print("\nAl-Folio Theme Setup:")
-    print("1. Edit the _config.yml file in the github_repo directory")
-    print("2. Run the system with ./run.py to generate posts")
-    print("3. Posts will be added to the _posts directory in the al-folio theme")
+    print("\nNext steps:")
+    print("1. Update your .env file with your GitHub credentials")
+    print("2. Run the system with: ./run.py")
 
 def create_activation_scripts(project_root, venv_dir):
-    """Create scripts to activate the virtual environment on different platforms."""
+    """Create convenience scripts to activate the virtual environment."""
+    print("Creating activation scripts...")
     
-    # Create bash activation script (for Linux/Mac)
-    bash_script = project_root / "run_blog.sh"
-    with open(bash_script, 'w') as f:
+    # Create run_blog.sh for Unix-like systems
+    run_script_sh = project_root / "run_blog.sh"
+    with open(run_script_sh, 'w') as f:
         f.write(f"""#!/bin/bash
-# Activate virtual environment and set up environment for auto_blog
+# Activation script for the auto_blog virtual environment
+
+# Get the directory of this script
 SCRIPT_DIR="$( cd "$( dirname "${{BASH_SOURCE[0]}}" )" &> /dev/null && pwd )"
-source "$SCRIPT_DIR/venv/bin/activate"
-echo "Virtual environment activated. You can now run:"
-echo "    python run_autoblog.py"
-echo ""
-echo "Or to start a shell in the virtual environment:"
-echo "    $SHELL"
+
+# Activate the virtual environment
+source "{venv_dir}/bin/activate"
+
+# Inform the user
+echo "Virtual environment activated. Run 'python run_autoblog.py' to start the system."
 """)
     
-    # Make the bash script executable
-    os.chmod(bash_script, 0o755)
+    # Make the shell script executable
+    os.chmod(run_script_sh, 0o755)
     
-    # Create batch script (for Windows)
-    bat_script = project_root / "run_blog.bat"
-    with open(bat_script, 'w') as f:
+    # Create run_blog.bat for Windows
+    run_script_bat = project_root / "run_blog.bat"
+    with open(run_script_bat, 'w') as f:
         f.write(f"""@echo off
-:: Activate virtual environment and set up environment for auto_blog
-set SCRIPT_DIR=%~dp0
-call "%SCRIPT_DIR%venv\\Scripts\\activate.bat"
-echo Virtual environment activated. You can now run:
-echo     python run_autoblog.py
-echo.
-echo Or to start a command prompt in the virtual environment:
-echo     cmd
+REM Activation script for the auto_blog virtual environment
+
+REM Get the directory of this script
+SET SCRIPT_DIR=%~dp0
+
+REM Activate the virtual environment
+call "{venv_dir}\\Scripts\\activate.bat"
+
+REM Inform the user
+echo Virtual environment activated. Run 'python run_autoblog.py' to start the system.
 """)
 
 if __name__ == "__main__":

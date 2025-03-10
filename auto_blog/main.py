@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 import time
 from PIL import Image, ImageDraw, ImageFont
+from dotenv import load_dotenv
 
 # Import configuration
 from . import config
@@ -40,6 +41,7 @@ logger = logging.getLogger(__name__)
 def main():
     """
     Main function to run the automated blog system.
+    Fetches RSS feeds, generates blog posts with AI, and pushes to GitHub repository.
     """
     logger.info("Starting automated blog system")
     
@@ -68,194 +70,170 @@ def main():
             branch=cfg['github_branch']
         )
         
-        # Ensure repository exists and pull latest changes
+        # Check if repo exists and pull latest changes
         if not github_manager.ensure_repo_exists():
             logger.error("Failed to ensure repository exists")
             sys.exit(1)
-        
-        # Ensure Jekyll structure for GitHub Pages
-        custom_domain = os.getenv('CUSTOM_DOMAIN', None)  # Add to .env if you have a custom domain
-        if not github_manager.ensure_jekyll_structure(custom_domain):
-            logger.warning("Failed to ensure al-folio structure, continuing anyway")
         
         if not github_manager.pull_latest_changes():
             logger.error("Failed to pull latest changes")
             sys.exit(1)
         
-        # Initialize RSS fetcher
+        # Initialize RSS fetcher with more robust configuration
         rss_fetcher = RSSFetcher(
             rss_urls=cfg['rss_feeds'],
             max_items_per_feed=cfg['max_rss_items'],
-            max_age_days=cfg['max_article_age_days']
+            max_age_days=cfg['max_article_age_days'],
+            feed_timeout=15,  # 15 seconds timeout for feed fetching
+            article_timeout=8, # 8 seconds timeout for article fetching
+            # Skip problematic feeds that often cause timeouts
+            known_problematic_feeds=['wired.com']
         )
         
         # Initialize AI content generator
         ai_factory = AIFactory()
-        ai_generator = ai_factory.create_generator(
-            provider=cfg['ai_provider'],
-            api_key=cfg['openai_api_key'] if cfg['ai_provider'] == 'openai' else cfg['gemini_api_key'],
-            model=cfg['openai_model'] if cfg['ai_provider'] == 'openai' else cfg['gemini_model']
-        )
+        ai_generator = None
+        
+        # Select AI provider
+        try:
+            # Reload environment variables to get the latest AI_PROVIDER setting
+            ai_provider = os.getenv('AI_PROVIDER', 'openai').lower()
+            logger.info(f"Using AI_PROVIDER directly from environment: {ai_provider}")
+            
+            if ai_provider == 'gemini':
+                gemini_api_key = os.getenv('GEMINI_API_KEY')
+                gemini_model = os.getenv('GEMINI_MODEL', 'gemini-1.5-flash')
+                ai_generator = ai_factory.create_generator('gemini', gemini_api_key, gemini_model)
+            else:
+                openai_api_key = os.getenv('OPENAI_API_KEY')
+                openai_model = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
+                ai_generator = ai_factory.create_generator('openai', openai_api_key, openai_model)
+        except Exception as ai_error:
+            logger.error(f"Error initializing AI generator: {ai_error}")
+            # Fall back to OpenAI if there's an error
+            openai_api_key = os.getenv('OPENAI_API_KEY')
+            openai_model = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
+            ai_generator = ai_factory.create_generator('openai', openai_api_key, openai_model)
         
         # Initialize image handler
-        # Images will be stored in the GitHub repo's assets/img directory for al-folio compatibility
-        image_dir = os.path.join(repo_dir, "assets/img")
-        os.makedirs(image_dir, exist_ok=True)
-        image_handler = ImageHandler(image_dir=image_dir)
+        images_dir = Path(repo_dir) / "assets" / "images"
+        os.makedirs(images_dir, exist_ok=True)
+        image_handler = ImageHandler(str(images_dir))
         
-        # Initialize post generator
+        # Initialize post generator for minimal-mistakes theme
+        posts_dir = Path(repo_dir) / "_posts"
+        os.makedirs(posts_dir, exist_ok=True)
+        
         post_generator = PostGenerator(
-            posts_dir=os.path.join(repo_dir, "_posts"),
-            site_url=cfg['site_url'],
-            author_name=cfg['author_name'],
-            image_dir="assets/img",  # al-folio uses this path for images
-            available_categories=cfg['jekyll_categories'],
-            available_tags=cfg['jekyll_tags']
+            posts_dir=str(posts_dir),
+            site_url=f"https://{cfg['github_username']}.github.io/{cfg['github_repo']}",
+            author_name=cfg['github_username'],
+            image_dir=str(images_dir),
+            available_categories=["Tech News", "AI", "Programming", "Web Development", "Data Science"],
+            available_tags=["ai", "machine-learning", "programming", "web", "mobile", "cloud", "security", "data"]
         )
         
         # Fetch RSS feeds
-        logger.info("Fetching RSS feeds")
-        rss_items = rss_fetcher.fetch_all_feeds()
+        logger.info("Fetching RSS feeds...")
+        all_items = rss_fetcher.fetch_all_feeds()
+        logger.info(f"Fetched {len(all_items)} items from RSS feeds")
         
-        if not rss_items:
-            logger.error("No RSS items fetched")
-            sys.exit(1)
+        # Generate and save posts
+        created_post_paths = []
         
-        logger.info(f"Fetched {len(rss_items)} RSS items")
+        # Re-read POSTS_PER_DAY directly from environment to ensure correct value
+        load_dotenv(override=True)  # Force reload env vars
         
-        # Shuffle and select items to process
-        random.shuffle(rss_items)
-        selected_items = rss_items[:cfg['posts_per_day']]
+        try:
+            posts_per_day = int(os.getenv('POSTS_PER_DAY', '1'))
+            logger.info(f"Using POSTS_PER_DAY directly from environment: {posts_per_day}")
+        except (ValueError, TypeError):
+            posts_per_day = 1
+            logger.warning(f"Could not parse POSTS_PER_DAY from environment, using default: {posts_per_day}")
         
-        logger.info(f"Selected {len(selected_items)} items for processing")
+        num_posts_to_generate = min(len(all_items), posts_per_day)
+        logger.info(f"Will generate {num_posts_to_generate} posts based on POSTS_PER_DAY setting")
         
-        # Process each selected item
-        created_files = []
-        
-        for i, item in enumerate(selected_items):
-            logger.info(f"Processing item {i+1}/{len(selected_items)}: {item.title}")
+        for i, item in enumerate(all_items[:num_posts_to_generate]):
+            logger.info(f"Processing item {i+1}/{num_posts_to_generate}: {item.title}")
             
-            # Convert RSS item to dictionary for AI processing
-            article_data = {
-                'title': item.title,
-                'link': item.link,
-                'description': item.description,
-                'content': item.content,
-                'published_date': item.published_date,
-                'author': item.author,
-                'categories': item.categories,
-                'image_url': item.image_url,
-                'source_name': item.source_name
-            }
-            
-            # Generate content using AI
-            logger.info(f"Generating content for: {item.title}")
-            generated_content = ai_generator.generate_blog_post(
-                article_data=article_data,
-                max_words=cfg['max_words_per_post']
-            )
-            
-            # Download featured image
-            logger.info(f"Downloading image for: {item.title}")
-            image_path = None
-            if item.image_url:
-                image_path = image_handler.download_article_image(article_data)
-                if image_path:
-                    # Resize image if needed
-                    image_handler.resize_image(image_path, max_width=800)
-            else:
-                # Ensure fallback image directory exists
-                fallback_dir = Path(__file__).parent / "assets" / "fallback_images"
-                if not fallback_dir.exists():
-                    os.makedirs(fallback_dir, exist_ok=True)
-                    logger.info(f"Created fallback images directory at {fallback_dir}")
+            try:
+                # Prepare article data for AI
+                article_data = {
+                    'title': item.title,
+                    'content': item.content,
+                    'description': item.description,
+                    'source_url': item.link,
+                    'source_name': item.source_name,
+                    'author': item.author,
+                    'image_url': item.image_url,
+                    'categories': item.categories
+                }
                 
-                # Generic fallback image path
-                generic_fallback_path = fallback_dir / "generic_fallback.jpg"
+                # Generate blog post content with AI
+                logger.info(f"Generating blog post content with {ai_provider}...")
+                generated_content = ai_generator.generate_blog_post(
+                    article_data=article_data,
+                    max_words=1200,
+                    style="informative and engaging"
+                )
                 
-                # Create a simple color image if the generic fallback doesn't exist
-                if not generic_fallback_path.exists():
-                    try:
-                        # Create a simple color image with text
-                        width, height = 800, 500
-                        image = Image.new('RGB', (width, height), color=(53, 59, 72))
-                        draw = ImageDraw.Draw(image)
-                        
-                        # Try to load a font, use default if not available
-                        try:
-                            # Try to find a system font
-                            font_size = 40
-                            try:
-                                font = ImageFont.truetype("Arial", font_size)
-                            except:
-                                # Try DejaVuSans on Linux
-                                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", font_size)
-                        except:
-                            # Use default if no system fonts found
-                            font = ImageFont.load_default()
-                        
-                        # Draw text
-                        text = "Tech News Blog"
-                        
-                        # Calculate text position (centered)
-                        # For newer Pillow versions that have textlength
-                        if hasattr(draw, 'textlength'):
-                            text_width = draw.textlength(text, font)
-                            text_position = ((width - text_width) / 2, height / 2 - 50)
-                        else:
-                            # For older Pillow versions
-                            text_width, text_height = draw.textsize(text, font)
-                            text_position = ((width - text_width) / 2, (height - text_height) / 2 - 50)
-                        
-                        draw.text(text_position, text, font=font, fill=(255, 255, 255))
-                        
-                        # Save the image
-                        image.save(generic_fallback_path)
-                        logger.info(f"Created generic fallback image at {generic_fallback_path}")
-                    except Exception as e:
-                        logger.error(f"Error creating fallback image: {str(e)}")
+                # Download featured image if available
+                image_path = None
+                if item.image_url:
+                    logger.info(f"Downloading image from {item.image_url}")
+                    image_path = image_handler.download_image(item.image_url, item.title)
+                    
+                    if image_path:
+                        # Resize image for optimal display
+                        image_path = image_handler.resize_image(image_path, max_width=1200)
                 
-                # Use the generic fallback if it exists
-                if generic_fallback_path.exists():
-                    import shutil
-                    dest_filename = "fallback_generic.jpg"
-                    dest_path = os.path.join(image_dir, dest_filename)
-                    shutil.copy(generic_fallback_path, dest_path)
-                    image_path = dest_path
-                    logger.info("Using generic fallback image")
-            
-            # Create Jekyll post
-            logger.info(f"Creating post for: {item.title}")
-            post_path = post_generator.create_post(
-                content_data=generated_content,
-                image_path=image_path
-            )
-            
-            if post_path:
-                created_files.append(post_path)
-                logger.info(f"Created post: {post_path}")
-            else:
-                logger.error(f"Failed to create post for: {item.title}")
-            
-            # Add a delay between posts to avoid rate limiting
-            if i < len(selected_items) - 1:
-                time.sleep(random.uniform(1.0, 3.0))
+                # Create Jekyll post
+                post_path = post_generator.create_post(
+                    content_data={
+                        'title': generated_content.get('title', item.title),
+                        'content': generated_content.get('content', ''),
+                        'tags': generated_content.get('tags', []),
+                        'meta_description': generated_content.get('meta_description', item.description),
+                        'source_url': item.link,
+                        'source_name': item.source_name
+                    },
+                    image_path=image_path
+                )
+                
+                if post_path:
+                    created_post_paths.append(post_path)
+                    logger.info(f"Created post: {post_path}")
+                else:
+                    logger.error(f"Failed to create post for {item.title}")
+                
+            except Exception as e:
+                logger.error(f"Error processing item {item.title}: {str(e)}")
+                continue
         
-        # Commit and push changes if any posts were created
-        if created_files:
-            logger.info(f"Committing and pushing {len(created_files)} new posts")
-            commit_message = f"Add {len(created_files)} new blog posts - {datetime.now().strftime('%Y-%m-%d')}"
+        # Commit new posts and push changes to GitHub repository
+        if created_post_paths:
+            logger.info(f"Created {len(created_post_paths)} new posts, committing changes...")
+            
+            for path in created_post_paths:
+                logger.info(f"New post: {path}")
+            
+            # Use a descriptive commit message
+            current_date = datetime.now().strftime('%Y-%m-%d')
+            commit_message = f"Add {len(created_post_paths)} new blog post(s) for {current_date}"
+            
+            # Commit and push ALL files in the github_repo directory
+            logger.info("Committing ALL files in the github_repo directory to ensure everything is up-to-date")
             if github_manager.commit_and_push_changes(commit_message):
-                logger.info("Successfully committed and pushed changes")
+                logger.info("Successfully committed and pushed new posts to GitHub")
             else:
-                logger.error("Failed to commit and push changes")
-        else:
-            logger.warning("No posts were created")
+                logger.error("Failed to commit and push changes to GitHub")
+                return False
         
         logger.info("Automated blog system completed successfully")
-    
+        
     except Exception as e:
-        logger.error(f"Error in automated blog system: {str(e)}", exc_info=True)
+        logger.error(f"Error in main execution: {str(e)}")
         sys.exit(1)
 
 if __name__ == "__main__":

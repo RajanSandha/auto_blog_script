@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional
 from pathlib import Path
 import yaml
+import shutil
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,7 @@ class PostGenerator:
     
     def create_post(self, content_data: Dict[str, Any], image_path: Optional[str] = None) -> Optional[str]:
         """
-        Create a Jekyll-compatible blog post for al-folio theme.
+        Create a Jekyll-compatible blog post for minimal-mistakes theme.
         
         Args:
             content_data: Dictionary containing the generated content and metadata
@@ -72,7 +73,7 @@ class PostGenerator:
             date_str = date.strftime('%Y-%m-%d')
             time_str = date.strftime('%H:%M:%S %z')
             slug = self._generate_slug(title)
-            filename = f"{date_str}-{slug}.md"  # al-folio uses .md extension
+            filename = f"{date_str}-{slug}.md"  # Minimal mistakes uses .md extension
             filepath = os.path.join(self.posts_dir, filename)
             
             # Prepare relative image path if an image is provided
@@ -80,65 +81,68 @@ class PostGenerator:
             if image_path:
                 # Get image path relative to the Jekyll site root
                 image_name = os.path.basename(image_path)
-                # al-folio typically uses /assets/img/ for images
-                image_relative_path = f"/assets/img/{image_name}"
+                # Minimal-mistakes typically uses /assets/images/ for images
+                image_relative_path = f"/assets/images/{image_name}"
                 
-                # Make sure the image is copied to assets/img directory
-                assets_img_dir = os.path.join(os.path.dirname(self.posts_dir), "assets/img")
+                # Make sure the image is in the assets/images directory
+                assets_img_dir = os.path.join(os.path.dirname(self.posts_dir), "assets/images")
                 os.makedirs(assets_img_dir, exist_ok=True)
                 
-                # Copy the image to assets/img directory
-                import shutil
-                target_img_path = os.path.join(assets_img_dir, image_name)
-                if not os.path.exists(target_img_path):
-                    shutil.copy(image_path, target_img_path)
-                    logger.info(f"Copied image to al-folio assets/img directory: {image_name}")
+                # Check if the image is already in the assets/images directory
+                target_image_path = os.path.join(assets_img_dir, image_name)
+                image_abs_path = os.path.abspath(image_path)
+                target_abs_path = os.path.abspath(target_image_path)
+                
+                # Only copy if the source and destination are different
+                if image_abs_path != target_abs_path:
+                    shutil.copy2(image_path, target_image_path)
+                    logger.info(f"Copied image from {image_path} to {target_image_path}")
+                else:
+                    logger.info(f"Image already in correct location: {target_image_path}")
             
-            # Select categories and tags
-            categories = self._select_categories()
-            final_tags = self._process_tags(tags)
+            # Process tags to be valid for Jekyll
+            processed_tags = self._process_tags(tags, max_tags=5)
             
-            # al-folio uses a slightly different front matter structure
-            front_matter = {
-                'layout': 'post',
+            # Prepare frontmatter in minimal-mistakes format
+            frontmatter = {
                 'title': title,
                 'date': f"{date_str} {time_str}",
-                'description': description or f"Summary of {title}",  # al-folio requires description
-                'tags': final_tags,
+                'categories': self._select_categories(max_categories=2),
+                'tags': processed_tags,
+                'excerpt': description if description else f"{' '.join(content.split()[:30])}...",
+                'header': {
+                    'teaser': image_relative_path if image_relative_path else None
+                },
+                'toc': True,
+                'toc_sticky': True,
+                'classes': 'wide'
             }
             
-            # Add categories if available
-            if categories:
-                front_matter['categories'] = categories
-                
-            # Add featured image if available (al-folio format)
-            if image_relative_path:
-                front_matter['thumbnail'] = image_relative_path
-                # Also add it in the content for better visibility
-                image_markdown = f"\n\n![{title}]({image_relative_path})\n\n"
-                content = image_markdown + content
+            # Remove None values from frontmatter
+            if frontmatter['header']['teaser'] is None:
+                del frontmatter['header']
             
-            # Add source attribution
+            # Format frontmatter as YAML
+            frontmatter_yaml = yaml.dump(frontmatter, default_flow_style=False, sort_keys=False, allow_unicode=True)
+            
+            # Add source attribution at the end of the content
             if source_url and source_name:
-                # Add source attribution to the content
-                source_attribution = f"\n\n*Source: [{source_name}]({source_url})*\n"
-                content += source_attribution
+                content += f"\n\n---\n\nSource: [{source_name}]({source_url})"
+            elif source_url:
+                content += f"\n\n---\n\nSource: [Original Article]({source_url})"
             
-            # Convert front matter to YAML
-            front_matter_yaml = yaml.dump(front_matter, default_flow_style=False)
+            # Combine frontmatter and content
+            post_content = f"---\n{frontmatter_yaml}---\n\n{content}"
             
-            # Combine front matter with content
-            full_content = f"---\n{front_matter_yaml}---\n\n{content}\n"
-            
-            # Write the post to file
+            # Write to file
             with open(filepath, 'w', encoding='utf-8') as f:
-                f.write(full_content)
+                f.write(post_content)
             
-            logger.info(f"Created al-folio post at {filepath}")
+            logger.info(f"Created post {filepath}")
             return filepath
-        
+            
         except Exception as e:
-            logger.error(f"Error creating Jekyll post: {str(e)}")
+            logger.error(f"Error creating post: {str(e)}")
             return None
     
     def _generate_slug(self, title: str) -> str:

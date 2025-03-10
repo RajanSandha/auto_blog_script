@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from typing import List, Dict, Any
 from dotenv import load_dotenv
+import re
 
 # Determine the project root directory
 PROJECT_ROOT = Path(__file__).parent.parent.absolute()
@@ -21,36 +22,58 @@ if not env_path.exists():
 
 load_dotenv(dotenv_path=env_path)
 
+def get_env_value(key, default=None):
+    """
+    Get an environment variable and clean any trailing comments.
+    """
+    value = os.getenv(key, default)
+    if value is not None and isinstance(value, str):
+        # Remove any inline comments (text after #) if not enclosed in quotes
+        # This regex keeps content in quotes intact but removes comments outside quotes
+        clean_value = re.sub(r'(?<!["\'\\])#.*$', '', value.strip())
+        return clean_value.strip()
+    return value
+
 # GitHub Configuration
-GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
-GITHUB_USERNAME = os.getenv('GITHUB_USERNAME')
-GITHUB_REPO = os.getenv('GITHUB_REPO')
-GITHUB_EMAIL = os.getenv('GITHUB_EMAIL')
-GITHUB_BRANCH = os.getenv('GITHUB_BRANCH', 'main')
+GITHUB_TOKEN = get_env_value('GITHUB_TOKEN')
+GITHUB_USERNAME = get_env_value('GITHUB_USERNAME')
+GITHUB_REPO = get_env_value('GITHUB_REPO')
+GITHUB_EMAIL = get_env_value('GITHUB_EMAIL')
+GITHUB_BRANCH = get_env_value('GITHUB_BRANCH', 'main')
 
 # Blog Settings
-BLOG_POST_PATH = os.getenv('BLOG_POST_PATH', '_posts')
-BLOG_IMAGE_PATH = os.getenv('BLOG_IMAGE_PATH', 'assets/images')
-POSTS_PER_DAY = int(os.getenv('POSTS_PER_DAY', '3'))
-MAX_WORDS_PER_POST = int(os.getenv('MAX_WORDS_PER_POST', '1000'))
+BLOG_POST_PATH = get_env_value('BLOG_POST_PATH', '_posts')
+BLOG_IMAGE_PATH = get_env_value('BLOG_IMAGE_PATH', 'assets/images')
+
+# Debug the value being loaded from environment
+raw_posts_per_day = get_env_value('POSTS_PER_DAY', '3')
+print(f"DEBUG: Raw POSTS_PER_DAY from env: '{raw_posts_per_day}'")
+try:
+    POSTS_PER_DAY = int(raw_posts_per_day)
+    print(f"DEBUG: Parsed POSTS_PER_DAY value: {POSTS_PER_DAY}")
+except ValueError:
+    print(f"DEBUG: Error parsing POSTS_PER_DAY value '{raw_posts_per_day}', using default 3")
+    POSTS_PER_DAY = 3
+
+MAX_WORDS_PER_POST = int(get_env_value('MAX_WORDS_PER_POST', '1000'))
 
 # AI Provider Settings
-AI_PROVIDER = os.getenv('AI_PROVIDER', 'openai')
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
-GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-pro')
+AI_PROVIDER = get_env_value('AI_PROVIDER', 'openai')
+OPENAI_API_KEY = get_env_value('OPENAI_API_KEY')
+OPENAI_MODEL = get_env_value('OPENAI_MODEL', 'gpt-3.5-turbo')
+GEMINI_API_KEY = get_env_value('GEMINI_API_KEY')
+GEMINI_MODEL = get_env_value('GEMINI_MODEL', 'gemini-pro')
 
 # RSS Feed Configuration
-RSS_FEEDS = os.getenv('RSS_FEEDS', '').split(',')
-MAX_RSS_ITEMS = int(os.getenv('MAX_RSS_ITEMS', '25'))
-MAX_ARTICLE_AGE_DAYS = int(os.getenv('MAX_ARTICLE_AGE_DAYS', '3'))
+RSS_FEEDS = get_env_value('RSS_FEEDS', '').split(',')
+MAX_RSS_ITEMS = int(get_env_value('MAX_RSS_ITEMS', '25'))
+MAX_ARTICLE_AGE_DAYS = int(get_env_value('MAX_ARTICLE_AGE_DAYS', '3'))
 
 # Jekyll Settings
-JEKYLL_CATEGORIES = os.getenv('JEKYLL_CATEGORIES', 'Technology,News,AI,Programming').split(',')
-JEKYLL_TAGS = os.getenv('JEKYLL_TAGS', 'tech,news,programming,ai,development').split(',')
-AUTHOR_NAME = os.getenv('AUTHOR_NAME', 'Blog Author')
-SITE_URL = os.getenv('SITE_URL', f'https://{GITHUB_USERNAME}.github.io')
+JEKYLL_CATEGORIES = get_env_value('JEKYLL_CATEGORIES', 'Technology,News,AI,Programming').split(',')
+JEKYLL_TAGS = get_env_value('JEKYLL_TAGS', 'tech,news,programming,ai,development').split(',')
+AUTHOR_NAME = get_env_value('AUTHOR_NAME', 'Blog Author')
+SITE_URL = get_env_value('SITE_URL', f'https://{GITHUB_USERNAME}.github.io')
 
 def validate_config() -> List[str]:
     """

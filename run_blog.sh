@@ -1,9 +1,11 @@
 #!/bin/bash
-# Activate virtual environment and set up environment for auto_blog
+# Activation script for the auto_blog virtual environment
+
+# Get the directory of this script
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-source "$SCRIPT_DIR/venv/bin/activate"
-echo "Virtual environment activated. You can now run:"
-echo "    python run_autoblog.py"
-echo ""
-echo "Or to start a shell in the virtual environment:"
-echo "    $SHELL"
+
+# Activate the virtual environment
+source "/var/www/html/github/auto_blog/venv/bin/activate"
+
+# Inform the user
+echo "Virtual environment activated. Run 'python run_autoblog.py' to start the system."

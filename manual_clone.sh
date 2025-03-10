@@ -1,8 +1,8 @@
 #!/bin/bash
-# Manual script to clone al-folio repository and set it up for use with auto_blog
+# Manual script to clone minimal-mistakes repository and set it up for use with auto_blog
 
 echo "======================================================="
-echo "Manual al-folio clone script for auto_blog"
+echo "Manual minimal-mistakes clone script for auto_blog"
 echo "======================================================="
 
 # Create github_repo directory
@@ -18,9 +18,9 @@ if [ -d "github_repo" ]; then
   fi
 fi
 
-# Clone al-folio repository
-echo "Cloning al-folio repository..."
-git clone https://github.com/alshedivat/al-folio.git github_repo
+# Clone minimal-mistakes repository
+echo "Cloning minimal-mistakes repository..."
+git clone https://github.com/mmistakes/minimal-mistakes.git github_repo
 
 # Check if clone was successful
 if [ $? -ne 0 ]; then
@@ -37,6 +37,15 @@ echo "Initializing new git repository..."
 cd github_repo
 git init
 
+# Clean up unnecessary files as recommended in minimal-mistakes docs
+echo "Cleaning up unnecessary files and directories..."
+rm -rf .editorconfig .gitattributes .github/ docs/ test/ CHANGELOG.md 
+rm -rf minimal-mistakes-jekyll.gemspec README.md screenshot.png screenshot-layouts.png .travis.yml
+
+# Create necessary directories
+echo "Creating necessary directories..."
+mkdir -p _posts assets/images
+
 echo "======================================================="
 echo "Setup complete!"
 echo "======================================================="
@@ -47,4 +56,5 @@ echo "2. Add the remote origin:"
 echo "   cd github_repo"
 echo "   git remote add origin https://github.com/yourusername/your-repo.git"
 echo ""
-echo "3. Continue with auto_blog setup to generate posts." 
+echo "3. Edit _config.yml to customize your site"
+echo "4. Continue with auto_blog setup to generate posts." 

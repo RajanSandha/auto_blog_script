@@ -1,13 +1,13 @@
 # Automated Blog Publishing System
 
-A fully automated system for generating and publishing daily tech news blog posts using AI and RSS feeds. This system fetches the latest tech news, uses AI to generate blog content, and publishes to GitHub Pages with minimal human interaction.
+A fully automated system for generating and publishing daily tech news blog posts using AI and RSS feeds. This system fetches the latest tech news, uses AI to generate blog content, and publishes to GitHub Pages with minimal human interaction using the Minimal Mistakes Jekyll theme.
 
 ## Features
 
 - Fetches tech news from multiple RSS feeds
 - Generates high-quality blog posts using AI (supports OpenAI and Google Gemini)
 - Downloads and locally stores images from news articles
-- Creates properly formatted Jekyll posts
+- Creates properly formatted Jekyll posts for Minimal Mistakes theme
 - Publishes to GitHub repository automatically
 - Flexible AI provider system - switch between different AI providers easily
 - Modular design for easy maintenance and extension
@@ -17,77 +17,30 @@ A fully automated system for generating and publishing daily tech news blog post
 - Python 3.8+
 - GitHub account
 - API keys for AI providers (OpenAI and/or Google Gemini)
-- Jekyll-based GitHub Pages blog setup
+- GitHub Personal Access Token with repo scope
 
-## Installation
+## Quick Start
 
-1. Clone this repository
+### 1. Clone this Repository
 ```bash
 git clone https://github.com/yourusername/auto_blog.git
 cd auto_blog
 ```
 
-2. Set up the virtual environment and install dependencies using one of these methods:
-
-### Standard Setup
-```bash
-# On Linux/Mac
-./setup.py
-
-# On Windows
-python setup.py
-```
-
-### Alternative Setup (if you encounter errors with the standard setup)
-If you have issues with the standard setup (like missing venv module), try the alternative setup:
-
-```bash
-# On Linux/Mac
-./setup_alt.py
-
-# On Windows
-python setup_alt.py
-```
-
-The alternative setup uses `virtualenv` instead of the built-in `venv` module and may work better on some systems.
-
-### Manual Setup
-If both setup scripts fail, you can manually create a virtual environment:
-
-```bash
-# Install virtualenv if needed
-pip install virtualenv
-
-# Create virtual environment
-virtualenv venv
-
-# Activate virtual environment
-# On Linux/Mac:
-source venv/bin/activate
-# On Windows:
-venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-3. Copy the example environment file and fill in your details
+### 2. Configure Environment Variables
+Copy the example environment file and fill in your details:
 ```bash
 cp auto_blog/.env.example .env
 ```
 
-4. Edit the configuration in `.env` with your API keys and other settings
-
-## Configuration
-
-The `.env` file should include:
-
+Edit the `.env` file with your API keys and GitHub credentials:
 ```
 # GitHub Configuration
 GITHUB_TOKEN=your_github_personal_access_token
 GITHUB_USERNAME=your_github_username
 GITHUB_REPO=your_blog_repository_name
 GITHUB_EMAIL=your_email@example.com
+GITHUB_BRANCH=main
 
 # AI Provider Settings
 AI_PROVIDER=openai  # or gemini
@@ -96,19 +49,21 @@ GEMINI_API_KEY=your_gemini_api_key
 
 # RSS Feed Configuration
 # Comma-separated list of RSS feed URLs
-RSS_FEEDS=https://techcrunch.com/feed/,https://www.theverge.com/rss/index.xml
+RSS_FEEDS=https://techcrunch.com/feed/,https://www.theverge.com/rss/index.xml,https://arstechnica.com/feed/
 ```
 
-See the `.env.example` file for all available configuration options.
+### 3. Run the Setup Script
+This will create a virtual environment and set up the Minimal Mistakes blog repository:
+```bash
+# On Linux/Mac
+./setup.py
 
-## Usage
+# On Windows
+python setup.py
+```
 
-You have several options to run the automated blog system:
-
-### Option 1: Using the all-in-one run script
-
-This automatically activates the virtual environment and runs the system:
-
+### 4. Run the System
+Generate and publish blog posts:
 ```bash
 # On Linux/Mac
 ./run.py
@@ -117,41 +72,120 @@ This automatically activates the virtual environment and runs the system:
 python run.py
 ```
 
-### Option 2: Activating the virtual environment first
+### 5. Enable GitHub Pages
+1. Go to your GitHub repository
+2. Navigate to Settings → Pages
+3. Under "Source", select "Deploy from a branch"
+4. Select your branch (main) and the root folder (/)
+5. Click Save
 
-```bash
-# On Linux/Mac
-source ./run_blog.sh
-python run_autoblog.py
+Your blog will be available at: `https://yourusername.github.io/yourrepository/`
 
-# On Windows
-run_blog.bat
-python run_autoblog.py
+## Detailed Setup
+
+### Setting Up GitHub
+
+1. **Create a GitHub Repository**
+   - Go to GitHub and create a new repository with the name you specified in `.env`
+   - You don't need to initialize it with any files
+
+2. **Create a Personal Access Token**
+   - Go to GitHub Settings → Developer Settings → Personal access tokens → Tokens (classic)
+   - Click "Generate new token", give it a descriptive name
+   - Select the "repo" scope (gives full control of private repositories)
+   - Copy the token and add it to your `.env` file as `GITHUB_TOKEN`
+
+### AI Providers
+
+You can choose between OpenAI (GPT models) and Google Gemini for content generation:
+
+1. **Using OpenAI**
+   - Sign up for an API key at [OpenAI](https://platform.openai.com/)
+   - Set `AI_PROVIDER=openai` in your `.env` file
+   - Add your API key as `OPENAI_API_KEY` in the `.env` file
+
+2. **Using Google Gemini**
+   - Sign up for an API key at [Google AI Studio](https://makersuite.google.com/)
+   - Set `AI_PROVIDER=gemini` in your `.env` file
+   - Add your API key as `GEMINI_API_KEY` in the `.env` file
+
+### RSS Feeds
+
+The system comes with default tech news feeds, but you can customize them:
+
+```
+RSS_FEEDS=https://techcrunch.com/feed/,https://www.theverge.com/rss/index.xml,https://www.wired.com/feed,https://arstechnica.com/feed/
 ```
 
-### Scheduling
+Add or remove feeds as needed, separating them with commas.
 
-#### On Linux (using cron)
+## Customizing Your Blog
 
-Add a cron job to run the script daily:
+### Theme Customization
 
+You can customize the Minimal Mistakes theme by editing these files:
+
+1. **_config.yml**: Main configuration file in the `github_repo` directory
+   - Set site name, description, author information
+   - Change color scheme with `minimal_mistakes_skin`
+   - Configure navigation, analytics, comments
+
+2. **Navigation**: Create or edit `github_repo/_data/navigation.yml`
+   ```yaml
+   main:
+     - title: "Posts"
+       url: /posts/
+     - title: "Categories"
+       url: /categories/
+     - title: "Tags"
+       url: /tags/
+     - title: "About"
+       url: /about/
+   ```
+
+3. **Profile Picture**: Add your photo to `github_repo/assets/images/` and update `_config.yml`
+
+For more detailed customization, refer to the [Minimal Mistakes documentation](https://mmistakes.github.io/minimal-mistakes/docs/quick-start-guide/).
+
+## Automatic Deployment
+
+### Running Daily Updates
+
+To automatically generate posts daily, you can set up a cron job (Linux/Mac) or Task Scheduler (Windows).
+
+#### Linux/Mac (cron)
 ```bash
+# Open crontab
 crontab -e
-```
 
-Add the following line to run the script at 8 AM every day:
-
-```
+# Add this line to run daily at 8 AM
 0 8 * * * cd /path/to/auto_blog && ./run.py >> logs/cron.log 2>&1
 ```
 
-#### On Windows (using Task Scheduler)
-
+#### Windows (Task Scheduler)
 1. Open Task Scheduler
 2. Create a new Basic Task
-3. Set the Trigger to run daily
-4. Set the Action to start a program
-5. Enter the path to the `run.py` script or to the Python executable in the virtual environment
+3. Set trigger to Daily
+4. Action: Start a Program
+5. Program/script: `C:\path\to\python.exe`
+6. Arguments: `C:\path\to\auto_blog\run.py`
+
+## Troubleshooting
+
+### Common Issues
+
+- **Authentication Errors**: Ensure your GitHub token has the correct permissions and is correctly set in the `.env` file
+
+- **Dependency Issues**: If you encounter errors with dependencies, try running:
+  ```bash
+  pip install -r requirements.txt
+  ```
+
+- **GitHub Pages Not Building**: Check if your repository has GitHub Pages enabled in Settings → Pages
+
+- **Missing Images**: If images aren't displaying, check that they're being correctly saved to `github_repo/assets/images/`
+
+- **RSS Feed Issues**: If specific feeds like Wired.com are causing problems, they will be automatically skipped after multiple timeout attempts
 
 ## Project Structure
 
@@ -167,35 +201,6 @@ auto_blog/
 ├── github_manager/          # GitHub repository management
 └── utils/                   # Utility functions
 ```
-
-## Troubleshooting
-
-### Virtual Environment Issues
-
-#### "externally-managed-environment" Error
-If you see an error like:
-```
-error: externally-managed-environment
-```
-
-This happens on Debian/Ubuntu systems that protect the system Python. Use the provided setup scripts which create a virtual environment automatically.
-
-#### Missing venv Module
-If you see an error like:
-```
-The virtual environment was not created successfully because ensurepip is not available
-```
-
-Try one of these solutions:
-1. Install the required package: `sudo apt install python3-venv` or `sudo apt install python3.X-venv` (replace X with your Python version)
-2. Use the alternative setup script: `./setup_alt.py`
-3. Follow the manual setup instructions
-
-#### Other Environment Issues
-
-1. Delete the `venv` directory and run `setup.py` or `setup_alt.py` again
-2. Check the logs in the `logs/` directory for error messages
-3. Ensure you have appropriate permissions to create directories and files
 
 ## License
 
