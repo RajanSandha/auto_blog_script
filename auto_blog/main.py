@@ -21,7 +21,7 @@ from .ai_content import AIFactory
 from .image_handler import ImageHandler
 from .post_generator import PostGenerator
 from .github_manager import GitHubManager
-from .utils import create_directory
+from .utils import create_directory, PostHistory
 
 # Set up logging
 log_dir = Path(__file__).parent.parent / "logs"
@@ -78,6 +78,13 @@ def main():
         if not github_manager.pull_latest_changes():
             logger.error("Failed to pull latest changes")
             sys.exit(1)
+        
+        # Initialize post history tracker to prevent duplicates
+        history_file = Path(__file__).parent.parent / "data" / "post_history.json"
+        post_history = PostHistory(str(history_file))
+        # Clean old entries to keep the history file manageable
+        post_history.clean_old_entries()
+        logger.info("Post history tracker initialized")
         
         # Initialize RSS fetcher with more robust configuration
         rss_fetcher = RSSFetcher(
@@ -138,8 +145,22 @@ def main():
         all_items = rss_fetcher.fetch_all_feeds()
         logger.info(f"Fetched {len(all_items)} items from RSS feeds")
         
+        # Filter out already processed items to avoid duplicates
+        unprocessed_items = [
+            item for item in all_items 
+            if not post_history.is_url_processed(item.link)
+        ]
+        logger.info(f"Filtering out already processed items: {len(all_items) - len(unprocessed_items)} filtered, {len(unprocessed_items)} remaining")
+        
+        # If no unprocessed items are found, log and exit
+        if not unprocessed_items:
+            logger.info("No new articles to process. All fetched articles have already been used for posts.")
+            logger.info("Try increasing MAX_RSS_ITEMS or MAX_ARTICLE_AGE_DAYS in .env for more content options.")
+            return
+        
         # Generate and save posts
         created_post_paths = []
+        processed_urls = []
         
         # Re-read POSTS_PER_DAY directly from environment to ensure correct value
         load_dotenv(override=True)  # Force reload env vars
@@ -151,10 +172,10 @@ def main():
             posts_per_day = 1
             logger.warning(f"Could not parse POSTS_PER_DAY from environment, using default: {posts_per_day}")
         
-        num_posts_to_generate = min(len(all_items), posts_per_day)
+        num_posts_to_generate = min(len(unprocessed_items), posts_per_day)
         logger.info(f"Will generate {num_posts_to_generate} posts based on POSTS_PER_DAY setting")
         
-        for i, item in enumerate(all_items[:num_posts_to_generate]):
+        for i, item in enumerate(unprocessed_items[:num_posts_to_generate]):
             logger.info(f"Processing item {i+1}/{num_posts_to_generate}: {item.title}")
             
             try:
@@ -203,6 +224,8 @@ def main():
                 
                 if post_path:
                     created_post_paths.append(post_path)
+                    # Mark the URL as processed to avoid future duplicates
+                    processed_urls.append(item.link)
                     logger.info(f"Created post: {post_path}")
                 else:
                     logger.error(f"Failed to create post for {item.title}")
@@ -210,6 +233,11 @@ def main():
             except Exception as e:
                 logger.error(f"Error processing item {item.title}: {str(e)}")
                 continue
+        
+        # Save processed URLs to history to prevent future duplicates
+        if processed_urls:
+            post_history.add_processed_urls(processed_urls)
+            logger.info(f"Added {len(processed_urls)} URLs to post history")
         
         # Commit new posts and push changes to GitHub repository
         if created_post_paths:
@@ -229,6 +257,10 @@ def main():
             else:
                 logger.error("Failed to commit and push changes to GitHub")
                 return False
+        
+        # Log post history stats
+        stats = post_history.get_stats()
+        logger.info(f"Post history stats: {stats['total_processed']} total processed URLs, {stats['recent_processed']} in the last 7 days")
         
         logger.info("Automated blog system completed successfully")
         
