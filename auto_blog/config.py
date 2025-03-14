@@ -75,6 +75,32 @@ JEKYLL_TAGS = get_env_value('JEKYLL_TAGS', 'tech,news,programming,ai,development
 AUTHOR_NAME = get_env_value('AUTHOR_NAME', 'Blog Author')
 SITE_URL = get_env_value('SITE_URL', f'https://{GITHUB_USERNAME}.github.io')
 
+# Ads Configuration
+ADS_ENABLED = get_env_value('ADS_ENABLED', 'false').lower() in ('true', 'yes', '1')
+ADS_POSITION = get_env_value('ADS_POSITION', 'sidebar')  # Options: sidebar, content_top, content_bottom, after_paragraph
+
+# Load all ad provider environment variables that start with ADS_
+ADS_PROVIDERS = {}
+for key, value in os.environ.items():
+    if key.startswith('ADS_') and not key in ['ADS_ENABLED', 'ADS_POSITION']:
+        provider_parts = key.split('_', 2)
+        if len(provider_parts) > 2:
+            provider = provider_parts[1]
+            setting = '_'.join(provider_parts[2:])
+            
+            if provider not in ADS_PROVIDERS:
+                ADS_PROVIDERS[provider] = {}
+            
+            ADS_PROVIDERS[provider][setting] = value
+
+# SEO Settings
+SEO_ENABLE_OPENGRAPH = get_env_value('SEO_ENABLE_OPENGRAPH', 'true').lower() in ('true', 'yes', '1')
+SEO_ENABLE_TWITTER_CARDS = get_env_value('SEO_ENABLE_TWITTER_CARDS', 'true').lower() in ('true', 'yes', '1')
+SEO_ENABLE_SCHEMA_ORG = get_env_value('SEO_ENABLE_SCHEMA_ORG', 'true').lower() in ('true', 'yes', '1')
+SEO_ENABLE_SITEMAP = get_env_value('SEO_ENABLE_SITEMAP', 'true').lower() in ('true', 'yes', '1')
+SEO_ENABLE_ROBOTS_TXT = get_env_value('SEO_ENABLE_ROBOTS_TXT', 'true').lower() in ('true', 'yes', '1')
+SEO_TWITTER_USERNAME = get_env_value('SEO_TWITTER_USERNAME', '')
+
 def validate_config() -> List[str]:
     """
     Validate the loaded configuration.
@@ -143,4 +169,17 @@ def get_config() -> Dict[str, Any]:
         'jekyll_tags': JEKYLL_TAGS,
         'author_name': AUTHOR_NAME,
         'site_url': SITE_URL,
+        
+        # Ads Configuration
+        'ads_enabled': ADS_ENABLED,
+        'ads_position': ADS_POSITION,
+        'ads_providers': ADS_PROVIDERS,
+        
+        # SEO Settings
+        'seo_enable_opengraph': SEO_ENABLE_OPENGRAPH,
+        'seo_enable_twitter_cards': SEO_ENABLE_TWITTER_CARDS,
+        'seo_enable_schema_org': SEO_ENABLE_SCHEMA_ORG,
+        'seo_enable_sitemap': SEO_ENABLE_SITEMAP,
+        'seo_enable_robots_txt': SEO_ENABLE_ROBOTS_TXT,
+        'seo_twitter_username': SEO_TWITTER_USERNAME,
     }

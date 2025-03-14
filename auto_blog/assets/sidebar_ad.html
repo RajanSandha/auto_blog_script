@@ -1,0 +1,38 @@
+{% if site.data.env.ads_enabled %}
+<div class="sidebar-ad">
+  <h4 class="sidebar-ad-title">Sponsored</h4>
+  
+  <!-- Google AdSense -->
+  {% if site.data.env.google_publisher_id %}
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ site.data.env.google_publisher_id }}"
+     crossorigin="anonymous"></script>
+    <!-- Sidebar Ad -->
+    <ins class="adsbygoogle"
+         style="display:block"
+         data-ad-client="{{ site.data.env.google_publisher_id }}"
+         {% if site.data.env.google_sidebar_slot %}
+         data-ad-slot="{{ site.data.env.google_sidebar_slot }}"
+         {% endif %}
+         data-ad-format="auto"
+         data-full-width-responsive="true"></ins>
+    <script>
+         (adsbygoogle = window.adsbygoogle || []).push({});
+    </script>
+  
+  <!-- Amazon Associates -->
+  {% elsif site.data.env.amazon_tracking_id %}
+    <iframe src="https://rcm-na.amazon-adsystem.com/e/cm?o=1&p=12&l=ur1&category=software_video_games&banner=1VAFX3EGWM12GYRFJ3R2&f=ifr&linkID={{ site.data.env.amazon_tracking_id }}&t={{ site.data.env.amazon_tracking_id }}&tracking_id={{ site.data.env.amazon_tracking_id }}" width="300" height="250" scrolling="no" border="0" marginwidth="0" style="border:none;" frameborder="0"></iframe>
+  
+  <!-- Custom HTML ad code -->
+  {% elsif site.data.env.custom_ad_code %}
+    {{ site.data.env.custom_ad_code }}
+  
+  <!-- Fallback (if ads are enabled but no provider is configured) -->
+  {% else %}
+    <div class="placeholder-ad">
+      <p>Your ad could be here</p>
+      <p><small>Configure ADS_GOOGLE_PUBLISHER_ID, ADS_AMAZON_TRACKING_ID, or ADS_CUSTOM_AD_CODE in your .env file</small></p>
+    </div>
+  {% endif %}
+</div>
+{% endif %} 

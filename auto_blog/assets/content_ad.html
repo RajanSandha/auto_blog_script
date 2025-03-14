@@ -1,0 +1,28 @@
+{% if site.data.env.ads_enabled %}
+<div class="content-ad">
+  <!-- Google AdSense -->
+  {% if site.data.env.google_publisher_id and site.data.env.google_content_slot %}
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ site.data.env.google_publisher_id }}"
+     crossorigin="anonymous"></script>
+    <!-- Content Ad -->
+    <ins class="adsbygoogle"
+         style="display:block; text-align:center;"
+         data-ad-layout="in-article"
+         data-ad-format="fluid"
+         data-ad-client="{{ site.data.env.google_publisher_id }}"
+         data-ad-slot="{{ site.data.env.google_content_slot }}"></ins>
+    <script>
+         (adsbygoogle = window.adsbygoogle || []).push({});
+    </script>
+  
+  <!-- Amazon Associates -->
+  {% elsif site.data.env.amazon_tracking_id %}
+    <iframe src="https://rcm-na.amazon-adsystem.com/e/cm?o=1&p=12&l=ur1&category=software_video_games&banner=1VAFX3EGWM12GYRFJ3R2&f=ifr&linkID={{ site.data.env.amazon_tracking_id }}&t={{ site.data.env.amazon_tracking_id }}&tracking_id={{ site.data.env.amazon_tracking_id }}" width="300" height="250" scrolling="no" border="0" marginwidth="0" style="border:none; margin: 0 auto; display: block;" frameborder="0"></iframe>
+  
+  <!-- Custom HTML ad code -->
+  {% elsif site.data.env.custom_ad_code %}
+    {{ site.data.env.custom_ad_code }}
+  
+  {% endif %}
+</div>
+{% endif %} 

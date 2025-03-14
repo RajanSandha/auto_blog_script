@@ -12,6 +12,7 @@ from pathlib import Path
 from git.exc import InvalidGitRepositoryError, NoSuchPathError
 import traceback
 import subprocess
+import shutil
 
 logger = logging.getLogger(__name__)
 
@@ -77,138 +78,308 @@ class GitHubManager:
     
     def ensure_repo_exists(self) -> bool:
         """
-        Ensure that the repository exists locally.
-        If the repository doesn't exist, it will be created from scratch.
+        Ensure that the GitHub repository exists locally.
+        If it doesn't exist, clone it.
         
         Returns:
-            True if the repository exists or was created successfully, False otherwise
+            True if the repository exists or was successfully created, False otherwise
         """
         try:
-            # Check if the repo directory exists
-            repo_path = Path(self.repo_path)
-            if repo_path.exists() and repo_path.is_dir():
-                logger.info(f"Found existing repository at {self.repo_path}")
-                try:
-                    # Try to load the git repository
-                    import git
-                    self.repo = git.Repo(self.repo_path)
-                    
-                    # Check if the remote is set correctly
-                    try:
-                        origin_url = self.repo.remotes.origin.url
-                        expected_url = f"https://github.com/{self.github_username}/{self.github_repo}.git"
-                        
-                        if origin_url != expected_url:
-                            logger.warning(f"Remote URL is {origin_url}, expected {expected_url}")
-                            logger.info("Updating remote URL")
-                            self.repo.remotes.origin.set_url(expected_url)
-                    except Exception as remote_err:
-                        logger.warning(f"Error checking remote: {remote_err}")
-                        # Try to add the remote if it doesn't exist
-                        try:
-                            self.repo.create_remote('origin', f'https://github.com/{self.github_username}/{self.github_repo}.git')
-                            logger.info("Added remote origin")
-                        except git.GitCommandError:
-                            # Remote might already exist with a different URL
-                            self.repo.delete_remote('origin')
-                            self.repo.create_remote('origin', f'https://github.com/{self.github_username}/{self.github_repo}.git')
-                            logger.info("Reset remote origin")
-                    
-                    # Configure user and email
-                    with self.repo.config_writer() as config:
-                        config.set_value('user', 'name', self.github_username)
-                        config.set_value('user', 'email', self.github_email)
-                    logger.info("Configured user and email")
-                    
-                    return True
-                    
-                except (ImportError, Exception) as e:
-                    logger.warning(f"Error loading existing repository: {e}")
-                    logger.warning("Attempting to initialize repository from scratch")
-                    # The directory exists but is not a valid git repository or has issues
-                    # Will re-initialize it below
+            # Check if the repository directory exists
+            if not os.path.exists(self.repo_path):
+                logger.info(f"Creating repository directory: {self.repo_path}")
+                os.makedirs(self.repo_path, exist_ok=True)
             
-            # At this point, either the directory doesn't exist or we couldn't load it as a git repo
-            # Initialize a new repository
-            return self._init_and_configure_repo()
+            # Check if Git repository is already initialized
+            if not os.path.exists(os.path.join(self.repo_path, '.git')):
+                logger.info("Initializing new Git repository")
                 
-        except Exception as e:
-            logger.error(f"Error ensuring repository exists: {e}")
-            return False
-    
-    def _init_and_configure_repo(self) -> bool:
-        """
-        Initialize and configure a new git repository.
-        This is called if the repository directory doesn't exist or is not a git repository.
-        
-        Returns:
-            True if initialization was successful, False otherwise
-        """
-        try:
-            import git
-            repo_path = Path(self.repo_path)
-            
-            # Create the directory if it doesn't exist
-            if not repo_path.exists():
-                logger.info(f"Creating directory: {repo_path}")
-                os.makedirs(repo_path, exist_ok=True)
-            
-            # If the directory exists and contains files, check if it's already a git repo
-            if repo_path.exists() and any(repo_path.iterdir()):
+                # Clone minimal-mistakes theme as a starting point
+                minimal_mistakes_url = "https://github.com/mmistakes/minimal-mistakes.git"
+                logger.info(f"Cloning minimal-mistakes theme from {minimal_mistakes_url}")
+                
                 try:
-                    # Try to load as git repository
-                    self.repo = git.Repo(repo_path)
-                    logger.info("Directory is already a git repository")
-                except git.InvalidGitRepositoryError:
-                    # Not a git repository, initialize it
-                    logger.info("Directory exists but is not a git repository, initializing...")
-                    self.repo = git.Repo.init(repo_path)
+                    # First, clone the minimal-mistakes repository
+                    subprocess.run(
+                        ["git", "clone", minimal_mistakes_url, self.repo_path],
+                        check=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE
+                    )
+                    
+                    # Remove the .git directory from the cloned repository
+                    git_dir = os.path.join(self.repo_path, '.git')
+                    if os.path.exists(git_dir):
+                        shutil.rmtree(git_dir)
+                    
+                    # Clean up unnecessary files from the minimal-mistakes theme
+                    self._cleanup_minimal_mistakes_files()
+                    
+                    # Create necessary directories
+                    posts_dir = os.path.join(self.repo_path, '_posts')
+                    images_dir = os.path.join(self.repo_path, 'assets/images')
+                    os.makedirs(posts_dir, exist_ok=True)
+                    os.makedirs(images_dir, exist_ok=True)
+                    
+                    # Copy custom assets (must happen before git init to avoid issues)
+                    self._copy_custom_assets()
+                    
+                    # Initialize a new Git repository
+                    self.repo = git.Repo.init(self.repo_path)
+                    logger.info("Initialized new Git repository")
+                    
+                    # Configure Git user information
+                    self.repo.config_writer().set_value("user", "name", self.github_username).release()
+                    self.repo.config_writer().set_value("user", "email", self.github_email).release()
+                    
+                    # Get the remote URL with token for authentication
+                    remote_url = self._get_remote_url_with_token()
+                    logger.info(f"Setting remote origin URL")
+                    
+                    try:
+                        # Create remote or set URL if it already exists
+                        try:
+                            origin = self.repo.create_remote('origin', remote_url)
+                            logger.info("Created remote 'origin'")
+                        except git.GitCommandError:
+                            # Remote already exists, set its URL
+                            self.repo.git.remote('set-url', 'origin', remote_url)
+                            origin = self.repo.remote('origin')
+                            logger.info("Updated remote 'origin' URL")
+                    except Exception as remote_error:
+                        logger.error(f"Error setting remote: {str(remote_error)}")
+                    
+                    # Create initial commit
+                    self.repo.git.add(A=True)
+                    self.repo.git.commit('-m', 'Initial commit with minimal-mistakes theme')
+                    logger.info("Created initial commit")
+                    
+                    # Create branch if it doesn't match 'main'
+                    clean_branch = self.branch.split('#')[0].strip()
+                    if clean_branch != 'main':
+                        logger.info(f"Creating and switching to {clean_branch} branch")
+                        self.repo.git.checkout('-b', clean_branch)
+                    
+                except subprocess.CalledProcessError as e:
+                    logger.error(f"Error cloning minimal-mistakes theme: {e.stderr.decode('utf-8')}")
+                    return False
+                except Exception as e:
+                    logger.error(f"Error setting up repository: {str(e)}")
+                    return False
             else:
-                # Empty directory or newly created, initialize it
-                logger.info(f"Initializing new git repository at {repo_path}")
-                self.repo = git.Repo.init(repo_path)
-            
-            # Configure remote
-            remote_url = f"https://github.com/{self.github_username}/{self.github_repo}.git"
-            try:
-                # Check if origin already exists
-                origin = self.repo.remote('origin')
-                if list(origin.urls)[0] != remote_url:
-                    logger.info(f"Updating remote URL from {list(origin.urls)[0]} to {remote_url}")
-                    origin.set_url(remote_url)
-            except (ValueError, git.GitCommandError):
-                # Origin doesn't exist, create it
-                logger.info(f"Adding remote origin: {remote_url}")
-                self.repo.create_remote('origin', remote_url)
-            
-            # Configure user and email
-            with self.repo.config_writer() as config:
-                config.set_value('user', 'name', self.github_username)
-                config.set_value('user', 'email', self.github_email)
-            logger.info("Configured user and email")
-            
-            # Configure default branch
-            clean_branch = self.branch.split('#')[0].strip()
-            
-            # Check if the branch already exists in the local repository
-            try:
-                # Try to get the branch
-                self.repo.heads[clean_branch]
-                logger.info(f"Branch {clean_branch} already exists")
-            except (IndexError, ValueError):
-                # Branch doesn't exist, create it
-                logger.info(f"Creating branch {clean_branch}")
-                self.repo.git.checkout('-b', clean_branch)
-            
-            # Set up Jekyll structure
-            self.ensure_jekyll_structure()
+                # Repository exists, just load it
+                logger.info(f"Loading existing Git repository at {self.repo_path}")
+                self.repo = git.Repo(self.repo_path)
+                
+                # Configure Git user information
+                self.repo.config_writer().set_value("user", "name", self.github_username).release()
+                self.repo.config_writer().set_value("user", "email", self.github_email).release()
+                
+                # Update the remote URL with token
+                remote_url = self._get_remote_url_with_token()
+                
+                # Check if remote exists, if not add it
+                try:
+                    if 'origin' not in [remote.name for remote in self.repo.remotes]:
+                        logger.info(f"Adding remote origin URL")
+                        self.repo.create_remote('origin', remote_url)
+                    else:
+                        # Update the remote URL to ensure it has the token
+                        logger.info(f"Updating remote origin URL")
+                        self.repo.git.remote('set-url', 'origin', remote_url)
+                except Exception as e:
+                    logger.warning(f"Error updating remote: {str(e)}")
+                
+                # Ensure the branch exists
+                clean_branch = self.branch.split('#')[0].strip()
+                try:
+                    # Try to check out branch, create if it doesn't exist
+                    try:
+                        self.repo.git.checkout(clean_branch)
+                    except git.GitCommandError:
+                        logger.info(f"Branch {clean_branch} not found, creating it")
+                        self.repo.git.checkout('-b', clean_branch)
+                except Exception as branch_error:
+                    logger.warning(f"Error checking out branch {clean_branch}: {str(branch_error)}")
             
             return True
             
         except Exception as e:
-            logger.error(f"Error initializing repository: {e}")
-            logger.error(f"Traceback: {traceback.format_exc()}")
+            logger.error(f"Error in ensure_repo_exists: {str(e)}")
             return False
+    
+    def _cleanup_minimal_mistakes_files(self):
+        """
+        Clean up unnecessary files from the minimal-mistakes theme.
+        """
+        try:
+            files_to_remove = [
+                '.editorconfig', '.gitattributes', '.travis.yml',
+                'CHANGELOG.md', 'README.md', 'screenshot.png', 
+                'screenshot-layouts.png', 'minimal-mistakes-jekyll.gemspec'
+            ]
+            
+            dirs_to_remove = [
+                '.github', 'docs', 'test'
+            ]
+            
+            for file in files_to_remove:
+                file_path = os.path.join(self.repo_path, file)
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                    logger.info(f"Removed {file}")
+            
+            for dir in dirs_to_remove:
+                dir_path = os.path.join(self.repo_path, dir)
+                if os.path.exists(dir_path):
+                    shutil.rmtree(dir_path)
+                    logger.info(f"Removed {dir} directory")
+                    
+        except Exception as e:
+            logger.warning(f"Error cleaning up minimal-mistakes files: {str(e)}")
+    
+    def _copy_custom_assets(self):
+        """
+        Copy custom CSS and other assets to the Jekyll theme.
+        """
+        try:
+            # Create assets/css directory if it doesn't exist
+            css_dir = os.path.join(self.repo_path, 'assets/css')
+            os.makedirs(css_dir, exist_ok=True)
+            
+            # Copy custom CSS file
+            src_css = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'assets/custom.css')
+            dest_css = os.path.join(css_dir, 'custom.css')
+            
+            if os.path.exists(src_css):
+                shutil.copy2(src_css, dest_css)
+                logger.info(f"Copied custom CSS to {dest_css}")
+                
+                # Add the custom CSS to _includes/head/custom.html
+                head_custom_path = os.path.join(self.repo_path, '_includes/head/custom.html')
+                head_custom_dir = os.path.dirname(head_custom_path)
+                
+                if not os.path.exists(head_custom_dir):
+                    os.makedirs(head_custom_dir, exist_ok=True)
+                
+                css_link = '<link rel="stylesheet" href="{{ "/assets/css/custom.css" | relative_url }}">'
+                
+                if os.path.exists(head_custom_path):
+                    # Read existing content and add CSS link if not already present
+                    with open(head_custom_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    
+                    if css_link not in content:
+                        with open(head_custom_path, 'a', encoding='utf-8') as f:
+                            f.write(f'\n<!-- Auto-Blog Custom CSS -->\n{css_link}\n')
+                else:
+                    # Create new file with CSS link
+                    with open(head_custom_path, 'w', encoding='utf-8') as f:
+                        f.write(f'<!-- Auto-Blog Custom CSS -->\n{css_link}\n')
+                
+                logger.info(f"Added custom CSS link to {head_custom_path}")
+            else:
+                logger.warning(f"Custom CSS file not found at {src_css}")
+            
+            # Copy sidebar ad include file
+            src_ad = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'assets/sidebar_ad.html')
+            includes_dir = os.path.join(self.repo_path, '_includes')
+            os.makedirs(includes_dir, exist_ok=True)
+            dest_ad = os.path.join(includes_dir, 'sidebar_ad.html')
+            
+            if os.path.exists(src_ad):
+                shutil.copy2(src_ad, dest_ad)
+                logger.info(f"Copied sidebar ad include to {dest_ad}")
+                
+                # Add the sidebar ad include to _includes/sidebar.html if it exists
+                sidebar_path = os.path.join(self.repo_path, '_includes/sidebar.html')
+                if os.path.exists(sidebar_path):
+                    with open(sidebar_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    
+                    # Add sidebar ad include if not already present
+                    if '{% include sidebar_ad.html %}' not in content:
+                        # Insert after the first nav__list
+                        if '<nav class="nav__list">' in content:
+                            modified_content = content.replace(
+                                '</nav>', 
+                                '</nav>\n{% include sidebar_ad.html %}'
+                            )
+                            with open(sidebar_path, 'w', encoding='utf-8') as f:
+                                f.write(modified_content)
+                            logger.info(f"Added sidebar ad include to {sidebar_path}")
+                        else:
+                            logger.warning(f"Could not find nav__list in {sidebar_path}")
+                else:
+                    logger.warning(f"Sidebar template not found at {sidebar_path}")
+            else:
+                logger.warning(f"Sidebar ad include file not found at {src_ad}")
+                
+            # Create _data directory for Jekyll environment variables
+            data_dir = os.path.join(self.repo_path, '_data')
+            os.makedirs(data_dir, exist_ok=True)
+            
+            # Create env.yml file for environment variables
+            env_file_path = os.path.join(data_dir, 'env.yml')
+            self._create_env_yaml(env_file_path)
+            
+        except Exception as e:
+            logger.warning(f"Error copying custom assets: {str(e)}")
+            
+    def _create_env_yaml(self, file_path: str) -> None:
+        """
+        Create a YAML file with environment variables for Jekyll to use.
+        
+        Args:
+            file_path: Path to the YAML file to create
+        """
+        try:
+            # Get all environment variables that we want to pass to Jekyll
+            env_vars = {}
+            
+            # Add ad-related environment variables
+            for key, value in os.environ.items():
+                # Convert environment variable names to lowercase with underscores for Jekyll
+                if key.startswith('ADS_'):
+                    # Convert to lowercase and remove ADS_ prefix
+                    jekyll_key = key[4:].lower()
+                    env_vars[jekyll_key] = value
+                elif key.startswith('SEO_'):
+                    # Convert to lowercase and remove SEO_ prefix
+                    jekyll_key = key[4:].lower()
+                    env_vars[jekyll_key] = value
+            
+            # Add GitHub-related environment variables
+            env_vars['github_username'] = self.github_username
+            env_vars['github_repo'] = self.github_repo
+            env_vars['site_url'] = os.environ.get('SITE_URL', f"https://{self.github_username}.github.io/{self.github_repo}")
+            env_vars['author_name'] = os.environ.get('AUTHOR_NAME', self.github_username)
+            
+            # Add ads_enabled flag explicitly
+            env_vars['ads_enabled'] = os.environ.get('ADS_ENABLED', 'false').lower() in ('true', 'yes', '1')
+            
+            # Write the YAML file
+            import yaml
+            with open(file_path, 'w', encoding='utf-8') as f:
+                yaml.dump(env_vars, f, default_flow_style=False)
+            
+            logger.info(f"Created environment variables YAML file at {file_path}")
+        except Exception as e:
+            logger.warning(f"Error creating environment variables YAML file: {str(e)}")
+            
+    def _get_remote_url_with_token(self) -> str:
+        """
+        Generate a GitHub remote URL with the token embedded for authentication.
+        
+        Returns:
+            Remote URL string with embedded token
+        """
+        if self.github_token and self.github_username and self.github_repo:
+            # Use the token in the URL for authentication
+            return f"https://{self.github_username}:{self.github_token}@github.com/{self.github_username}/{self.github_repo}.git"
+        else:
+            # Fallback to regular URL if token is missing
+            return f"https://github.com/{self.github_username}/{self.github_repo}.git"
     
     def ensure_jekyll_structure(self, custom_domain: str = None) -> bool:
         """

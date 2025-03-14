@@ -4,6 +4,14 @@ A fully automated system for generating and publishing daily tech news blog post
 
 ## Features
 
+- 🤖 Fully automated blog posting from RSS feeds
+- 📱 Mobile-responsive design using Minimal Mistakes Jekyll theme
+- 🔍 SEO optimization for better visibility
+- 🔄 Daily updates via scheduled jobs
+- 🌐 Multiple language support
+- 📊 Analytics integration
+- 💰 Ad monetization support (Google AdSense, Amazon Associates)
+- 🐳 Docker support for easy deployment
 - Fetches tech news from multiple RSS feeds
 - Generates high-quality blog posts using AI (supports OpenAI and Google Gemini)
 - Downloads and locally stores images from news articles
@@ -235,3 +243,65 @@ auto_blog/
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+## Monetization
+
+Auto-Blog supports ad monetization through:
+
+- **Google AdSense**: Integrate your AdSense publisher ID and ad slots
+- **Amazon Associates**: Add your Amazon affiliate tracking ID
+- **Custom Ad Code**: Insert your own custom HTML ad code
+
+Configure ad settings in your `.env` file:
+
+```
+# Ad Configuration
+ADS_ENABLED=true
+ADS_GOOGLE_PUBLISHER_ID=pub-XXXXXXXXXXXXXXXX
+ADS_GOOGLE_SIDEBAR_SLOT=XXXXXXXXXX
+ADS_GOOGLE_CONTENT_SLOT=XXXXXXXXXX
+ADS_AMAZON_TRACKING_ID=XXXX-XX
+ADS_CUSTOM_AD_CODE=<div>Your custom ad HTML</div>
+```
+
+Ads are automatically placed in strategic locations on your site. For more details, see [Ad Configuration Guide](auto_blog/docs/AD_CONFIGURATION.md).
+
+## Environment Variables
+
+Auto-Blog uses environment variables for configuration. Create a `.env` file in the root directory with the following:
+
+```
+# GitHub Configuration
+GITHUB_TOKEN=your_github_token
+GITHUB_USERNAME=your_username
+GITHUB_REPO=your_repo_name
+GITHUB_EMAIL=your_email@example.com
+GITHUB_BRANCH=main
+
+# RSS Configuration
+RSS_FEEDS=https://example.com/feed1.xml,https://example2.com/feed2.xml
+MAX_POSTS_PER_SOURCE=5
+POSTS_PER_DAY=3
+
+# Blog Configuration
+BLOG_TITLE=My Automated Blog
+BLOG_DESCRIPTION=Automatically generated blog posts from my favorite sources
+AUTHOR_NAME=Your Name
+SITE_URL=https://yourusername.github.io/your-repo-name
+
+# OpenAI Configuration (Optional)
+OPENAI_API_KEY=your_openai_api_key
+OPENAI_MODEL=gpt-3.5-turbo
+
+# SEO Configuration
+SEO_KEYWORDS=blog,automation,technology,news
+SEO_DESCRIPTION=My automated blog featuring the latest tech news and insights
+
+# Ad Configuration
+ADS_ENABLED=false
+ADS_GOOGLE_PUBLISHER_ID=
+ADS_GOOGLE_SIDEBAR_SLOT=
+ADS_GOOGLE_CONTENT_SLOT=
+ADS_AMAZON_TRACKING_ID=
+ADS_CUSTOM_AD_CODE=
+```

@@ -1,0 +1,169 @@
+/* 
+ * Custom CSS for Auto-Blog
+ * Includes styling for advertisements and SEO optimizations
+ */
+
+/* Ad Container Styling */
+.ads-container {
+    margin: 20px 0;
+    padding: 15px;
+    background-color: #f9f9f9;
+    border-radius: 5px;
+    text-align: center;
+    overflow: hidden;
+    max-width: 100%;
+    clear: both;
+}
+
+/* Sidebar Ad Styling */
+.sidebar .ads-container {
+    margin: 0 0 20px 0;
+    padding: 10px;
+}
+
+/* Content Top Ad Styling */
+.ads-content_top {
+    margin-top: 0;
+    margin-bottom: 30px;
+}
+
+/* Content Bottom Ad Styling */
+.ads-content_bottom {
+    margin-top: 30px;
+    margin-bottom: 0;
+}
+
+/* After Paragraph Ad Styling */
+.ads-after_paragraph {
+    margin: 30px 0;
+}
+
+/* Responsive Ad Styling */
+@media screen and (max-width: 768px) {
+    .ads-container {
+        padding: 10px;
+        margin: 15px 0;
+    }
+    
+    .sidebar .ads-container {
+        margin-bottom: 15px;
+    }
+}
+
+/* Make sure ads don't break layout on small screens */
+.ads-container img,
+.ads-container iframe {
+    max-width: 100%;
+    height: auto;
+}
+
+/* Schema.org structured data styling (hidden from view) */
+.schema-org-data {
+    display: none;
+}
+
+/* Auto-Blog Custom CSS */
+
+/* Sidebar Ad Styles */
+.sidebar-ad {
+  margin-top: 2em;
+  margin-bottom: 2em;
+  border-radius: 4px;
+  padding: 1em;
+  background-color: rgba(240, 240, 240, 0.5);
+}
+
+.sidebar-ad-title {
+  margin-top: 0;
+  margin-bottom: 0.5em;
+  font-size: 0.9em;
+  text-transform: uppercase;
+  color: #6f777d;
+}
+
+.placeholder-ad {
+  border: 1px dashed #ccc;
+  padding: 1em;
+  text-align: center;
+  font-size: 0.9em;
+  color: #666;
+}
+
+.placeholder-ad p {
+  margin: 0;
+}
+
+.placeholder-ad p small {
+  font-size: 0.8em;
+  opacity: 0.8;
+}
+
+/* Post Styles */
+.page__content a:not(.btn):hover {
+  text-decoration: underline;
+}
+
+/* Make images responsive */
+.page__content img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Custom Pagination */
+.pagination {
+  display: flex;
+  justify-content: center;
+  margin: 2em 0;
+}
+
+/* Improve code block readability */
+div.highlighter-rouge {
+  margin-bottom: 1.5em;
+}
+
+code.highlighter-rouge {
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+}
+
+/* Improve table styles */
+table {
+  margin-bottom: 2em;
+  width: 100%;
+  border-collapse: collapse;
+}
+
+table th {
+  background-color: #f8f9fa;
+}
+
+table th, table td {
+  padding: 0.5em;
+  border: 1px solid #ddd;
+}
+
+/* Print-friendly styles */
+@media print {
+  .sidebar, .page__footer, .page__share, .pagination, 
+  .sidebar-ad, .ads, .adsbygoogle {
+    display: none !important;
+  }
+  
+  .page {
+    float: none;
+    width: 100%;
+    padding: 0;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .sidebar-ad {
+    background-color: rgba(50, 50, 50, 0.3);
+  }
+  
+  .placeholder-ad {
+    border-color: #444;
+    color: #ccc;
+  }
+} 

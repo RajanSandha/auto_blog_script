@@ -21,7 +21,7 @@ from .ai_content import AIFactory
 from .image_handler import ImageHandler
 from .post_generator import PostGenerator
 from .github_manager import GitHubManager
-from .utils import create_directory, PostHistory
+from .utils import create_directory, PostHistory, AdManager
 
 # Set up logging
 log_dir = Path(__file__).parent.parent / "logs"
@@ -58,215 +58,246 @@ def main():
     
     # Determine working directory for GitHub repo
     repo_dir = Path(__file__).parent.parent / "github_repo"
+    os.makedirs(repo_dir, exist_ok=True)
     
-    try:
-        # Initialize GitHub manager
-        github_manager = GitHubManager(
-            repo_path=str(repo_dir),
-            github_token=cfg['github_token'],
-            github_username=cfg['github_username'],
-            github_email=cfg['github_email'],
-            github_repo=cfg['github_repo'],
-            branch=cfg['github_branch']
-        )
-        
-        # Check if repo exists and pull latest changes
-        if not github_manager.ensure_repo_exists():
-            logger.error("Failed to ensure repository exists")
-            sys.exit(1)
-        
-        if not github_manager.pull_latest_changes():
-            logger.error("Failed to pull latest changes")
-            sys.exit(1)
-        
-        # Initialize post history tracker to prevent duplicates
-        history_file = Path(__file__).parent.parent / "data" / "post_history.json"
-        post_history = PostHistory(str(history_file))
-        # Clean old entries to keep the history file manageable
-        post_history.clean_old_entries()
-        logger.info("Post history tracker initialized")
-        
-        # Initialize RSS fetcher with more robust configuration
-        rss_fetcher = RSSFetcher(
-            rss_urls=cfg['rss_feeds'],
-            max_items_per_feed=cfg['max_rss_items'],
-            max_age_days=cfg['max_article_age_days'],
-            feed_timeout=15,  # 15 seconds timeout for feed fetching
-            article_timeout=8, # 8 seconds timeout for article fetching
-            # Skip problematic feeds that often cause timeouts
-            known_problematic_feeds=['wired.com']
-        )
-        
-        # Initialize AI content generator
-        ai_factory = AIFactory()
-        ai_generator = None
-        
-        # Select AI provider
-        try:
-            # Reload environment variables to get the latest AI_PROVIDER setting
-            ai_provider = os.getenv('AI_PROVIDER', 'openai').lower()
-            logger.info(f"Using AI_PROVIDER directly from environment: {ai_provider}")
-            
-            if ai_provider == 'gemini':
-                gemini_api_key = os.getenv('GEMINI_API_KEY')
-                gemini_model = os.getenv('GEMINI_MODEL', 'gemini-1.5-flash')
-                ai_generator = ai_factory.create_generator('gemini', gemini_api_key, gemini_model)
-            else:
-                openai_api_key = os.getenv('OPENAI_API_KEY')
-                openai_model = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
-                ai_generator = ai_factory.create_generator('openai', openai_api_key, openai_model)
-        except Exception as ai_error:
-            logger.error(f"Error initializing AI generator: {ai_error}")
-            # Fall back to OpenAI if there's an error
-            openai_api_key = os.getenv('OPENAI_API_KEY')
-            openai_model = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
-            ai_generator = ai_factory.create_generator('openai', openai_api_key, openai_model)
-        
-        # Initialize image handler
-        images_dir = Path(repo_dir) / "assets" / "images"
-        os.makedirs(images_dir, exist_ok=True)
-        image_handler = ImageHandler(str(images_dir))
-        
-        # Initialize post generator for minimal-mistakes theme
-        posts_dir = Path(repo_dir) / "_posts"
-        os.makedirs(posts_dir, exist_ok=True)
-        
-        post_generator = PostGenerator(
-            posts_dir=str(posts_dir),
-            site_url=f"https://{cfg['github_username']}.github.io/{cfg['github_repo']}",
-            author_name=cfg['github_username'],
-            image_dir=str(images_dir),
-            available_categories=["Tech News", "AI", "Programming", "Web Development", "Data Science"],
-            available_tags=["ai", "machine-learning", "programming", "web", "mobile", "cloud", "security", "data"]
-        )
-        
-        # Fetch RSS feeds
-        logger.info("Fetching RSS feeds...")
-        all_items = rss_fetcher.fetch_all_feeds()
-        logger.info(f"Fetched {len(all_items)} items from RSS feeds")
-        
-        # Filter out already processed items to avoid duplicates
-        unprocessed_items = [
-            item for item in all_items 
-            if not post_history.is_url_processed(item.link)
-        ]
-        logger.info(f"Filtering out already processed items: {len(all_items) - len(unprocessed_items)} filtered, {len(unprocessed_items)} remaining")
-        
-        # If no unprocessed items are found, log and exit
-        if not unprocessed_items:
-            logger.info("No new articles to process. All fetched articles have already been used for posts.")
-            logger.info("Try increasing MAX_RSS_ITEMS or MAX_ARTICLE_AGE_DAYS in .env for more content options.")
-            return
-        
-        # Generate and save posts
-        created_post_paths = []
-        processed_urls = []
-        
-        # Re-read POSTS_PER_DAY directly from environment to ensure correct value
-        load_dotenv(override=True)  # Force reload env vars
-        
-        try:
-            posts_per_day = int(os.getenv('POSTS_PER_DAY', '1'))
-            logger.info(f"Using POSTS_PER_DAY directly from environment: {posts_per_day}")
-        except (ValueError, TypeError):
-            posts_per_day = 1
-            logger.warning(f"Could not parse POSTS_PER_DAY from environment, using default: {posts_per_day}")
-        
-        num_posts_to_generate = min(len(unprocessed_items), posts_per_day)
-        logger.info(f"Will generate {num_posts_to_generate} posts based on POSTS_PER_DAY setting")
-        
-        for i, item in enumerate(unprocessed_items[:num_posts_to_generate]):
-            logger.info(f"Processing item {i+1}/{num_posts_to_generate}: {item.title}")
-            
-            try:
-                # Prepare article data for AI
-                article_data = {
-                    'title': item.title,
-                    'content': item.content,
-                    'description': item.description,
-                    'source_url': item.link,
-                    'source_name': item.source_name,
-                    'author': item.author,
-                    'image_url': item.image_url,
-                    'categories': item.categories
-                }
-                
-                # Generate blog post content with AI
-                logger.info(f"Generating blog post content with {ai_provider}...")
-                generated_content = ai_generator.generate_blog_post(
-                    article_data=article_data,
-                    max_words=1200,
-                    style="informative and engaging"
-                )
-                
-                # Download featured image if available
-                image_path = None
-                if item.image_url:
-                    logger.info(f"Downloading image from {item.image_url}")
-                    image_path = image_handler.download_image(item.image_url, item.title)
-                    
-                    if image_path:
-                        # Resize image for optimal display
-                        image_path = image_handler.resize_image(image_path, max_width=1200)
-                
-                # Create Jekyll post
-                post_path = post_generator.create_post(
-                    content_data={
-                        'title': generated_content.get('title', item.title),
-                        'content': generated_content.get('content', ''),
-                        'tags': generated_content.get('tags', []),
-                        'meta_description': generated_content.get('meta_description', item.description),
-                        'source_url': item.link,
-                        'source_name': item.source_name
-                    },
-                    image_path=image_path
-                )
-                
-                if post_path:
-                    created_post_paths.append(post_path)
-                    # Mark the URL as processed to avoid future duplicates
-                    processed_urls.append(item.link)
-                    logger.info(f"Created post: {post_path}")
-                else:
-                    logger.error(f"Failed to create post for {item.title}")
-                
-            except Exception as e:
-                logger.error(f"Error processing item {item.title}: {str(e)}")
-                continue
-        
-        # Save processed URLs to history to prevent future duplicates
-        if processed_urls:
-            post_history.add_processed_urls(processed_urls)
-            logger.info(f"Added {len(processed_urls)} URLs to post history")
-        
-        # Commit new posts and push changes to GitHub repository
-        if created_post_paths:
-            logger.info(f"Created {len(created_post_paths)} new posts, committing changes...")
-            
-            for path in created_post_paths:
-                logger.info(f"New post: {path}")
-            
-            # Use a descriptive commit message
-            current_date = datetime.now().strftime('%Y-%m-%d')
-            commit_message = f"Add {len(created_post_paths)} new blog post(s) for {current_date}"
-            
-            # Commit and push ALL files in the github_repo directory
-            logger.info("Committing ALL files in the github_repo directory to ensure everything is up-to-date")
-            if github_manager.commit_and_push_changes(commit_message):
-                logger.info("Successfully committed and pushed new posts to GitHub")
-            else:
-                logger.error("Failed to commit and push changes to GitHub")
-                return False
-        
-        # Log post history stats
-        stats = post_history.get_stats()
-        logger.info(f"Post history stats: {stats['total_processed']} total processed URLs, {stats['recent_processed']} in the last 7 days")
-        
-        logger.info("Automated blog system completed successfully")
-        
-    except Exception as e:
-        logger.error(f"Error in main execution: {str(e)}")
+    # Set up GitHub manager
+    github_manager = GitHubManager(
+        repo_path=str(repo_dir),
+        github_token=cfg['github_token'],
+        github_username=cfg['github_username'],
+        github_repo=cfg['github_repo'],
+        branch=cfg['github_branch'],
+        author_name=cfg['github_username'],
+        author_email=cfg['github_email']
+    )
+    
+    # Ensure GitHub repository exists and is up to date
+    if not github_manager.ensure_repo_exists():
+        logger.error("Failed to initialize GitHub repository")
         sys.exit(1)
+        
+    # Pull latest changes to avoid conflicts
+    if not github_manager.pull_latest_changes():
+        logger.warning("Failed to pull latest changes, continuing with local repository")
+    
+    # Initialize RSS fetcher
+    rss_fetcher = RSSFetcher(
+        feed_urls=cfg['rss_feeds'],
+        max_items_per_feed=cfg['max_rss_items'],
+        max_age_days=cfg['max_article_age_days']
+    )
+    
+    # Initialize AI content generator
+    ai_generator = AIFactory.create_ai_provider(
+        provider=cfg['ai_provider'],
+        api_key=cfg.get(f"{cfg['ai_provider']}_api_key"),
+        model=cfg.get(f"{cfg['ai_provider']}_model")
+    )
+    
+    # Initialize image handler
+    image_handler = ImageHandler(
+        output_dir=os.path.join(repo_dir, cfg['blog_image_path'])
+    )
+    
+    # Initialize ad manager if ads are enabled
+    ad_manager = None
+    if 'ads_enabled' in cfg and cfg['ads_enabled']:
+        logger.info("Initializing ad manager with configuration")
+        ad_manager = AdManager(cfg)
+    
+    # Get SEO configuration
+    seo_config = {
+        'seo_enable_opengraph': cfg.get('seo_enable_opengraph', True),
+        'seo_enable_twitter_cards': cfg.get('seo_enable_twitter_cards', True),
+        'seo_enable_schema_org': cfg.get('seo_enable_schema_org', True),
+        'seo_enable_sitemap': cfg.get('seo_enable_sitemap', True),
+        'seo_enable_robots_txt': cfg.get('seo_enable_robots_txt', True),
+        'seo_twitter_username': cfg.get('seo_twitter_username', '')
+    }
+    
+    # Initialize post generator
+    post_generator = PostGenerator(
+        posts_dir=os.path.join(repo_dir, cfg['blog_post_path']),
+        site_url=cfg['site_url'],
+        author_name=cfg['author_name'],
+        image_dir=os.path.join(repo_dir, cfg['blog_image_path']),
+        available_categories=cfg['jekyll_categories'],
+        available_tags=cfg['jekyll_tags'],
+        ad_manager=ad_manager,
+        seo_config=seo_config
+    )
+    
+    # Initialize post history tracker to avoid duplicates
+    history_file = os.path.join(str(log_dir), "post_history.json")
+    post_history = PostHistory(history_file)
+    
+    # Generate posts
+    posts_to_create = cfg['posts_per_day']
+    posts_created = []
+    
+    logger.info(f"Attempting to create {posts_to_create} new posts")
+    
+    # Attempt to fetch articles from RSS feeds
+    rss_items = rss_fetcher.fetch_all_feeds()
+    if not rss_items:
+        logger.error("Failed to fetch any RSS feeds")
+        sys.exit(1)
+    
+    logger.info(f"Fetched {len(rss_items)} RSS items from feeds")
+    
+    # Filter out articles that we've already processed
+    new_items = [item for item in rss_items if not post_history.is_processed(item['url'])]
+    logger.info(f"{len(new_items)} new RSS items after filtering out processed ones")
+    
+    # Shuffle to randomize which items we use
+    random.shuffle(new_items)
+    
+    # Generate posts from RSS items
+    for i, item in enumerate(new_items):
+        if i >= posts_to_create:
+            break
+            
+        logger.info(f"Processing item {i+1}/{posts_to_create}: {item['title']}")
+        
+        try:
+            # Mark this URL as processed to avoid duplicates
+            post_history.mark_as_processed(item['url'])
+            
+            # Generate enhanced content using AI
+            logger.info(f"Generating content with {cfg['ai_provider']} for: {item['title']}")
+            content_data = ai_generator.generate_content(
+                title=item['title'],
+                content=item['description'],
+                url=item['url'],
+                max_words=cfg['max_words_per_post']
+            )
+            
+            if not content_data:
+                logger.warning(f"Failed to generate content for: {item['title']}")
+                continue
+                
+            # Generate an image for the post using AI if available in the future
+            # For now, we'll use placeholder images
+            image_path = image_handler.generate_placeholder_image(
+                title=item['title'],
+                width=1200,
+                height=630
+            )
+            
+            # Create the post file
+            post_path = post_generator.create_post(
+                content_data=content_data,
+                image_path=image_path
+            )
+            
+            if post_path:
+                posts_created.append(post_path)
+                logger.info(f"Created post: {post_path}")
+            else:
+                logger.warning(f"Failed to create post for: {item['title']}")
+                
+        except Exception as e:
+            logger.error(f"Error processing item: {str(e)}")
+    
+    # Save post history
+    post_history.save()
+    
+    # Create SEO files if enabled
+    if cfg.get('seo_enable_sitemap', True):
+        _create_sitemap(repo_dir, cfg['site_url'])
+        
+    if cfg.get('seo_enable_robots_txt', True):
+        _create_robots_txt(repo_dir, cfg['site_url'])
+    
+    # Commit and push changes
+    if posts_created:
+        logger.info(f"Created {len(posts_created)} new posts")
+        
+        # Commit all changes to ensure all assets are included
+        success = github_manager.commit_and_push_changes(
+            message=f"Add {len(posts_created)} new blog posts"
+        )
+        
+        if success:
+            logger.info("Successfully pushed changes to GitHub repository")
+            logger.info(f"Website will be updated at: {cfg['site_url']}")
+        else:
+            logger.error("Failed to push changes to GitHub repository")
+    else:
+        logger.info("No new posts were created")
+    
+    logger.info("Automated blog system completed successfully")
+
+def _create_sitemap(repo_dir: Path, site_url: str) -> None:
+    """
+    Create a sitemap.xml file for the website.
+    
+    Args:
+        repo_dir: Path to the GitHub repository
+        site_url: URL of the site
+    """
+    try:
+        # Jekyll automatically generates the sitemap if the plugin is enabled
+        # We just need to make sure the _config.yml has the plugin
+        config_path = repo_dir / "_config.yml"
+        
+        if config_path.exists():
+            # Read existing config
+            with open(config_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Check if sitemap plugin is already configured
+            if 'jekyll-sitemap' not in content:
+                logger.info("Adding sitemap plugin to _config.yml")
+                
+                # Prepare new content with sitemap plugin
+                if 'plugins:' in content:
+                    # Add to existing plugins list
+                    content = content.replace('plugins:', 'plugins:\n  - jekyll-sitemap')
+                else:
+                    # Add new plugins section
+                    content += '\n\n# SEO Plugins\nplugins:\n  - jekyll-sitemap\n'
+                
+                # Write updated config
+                with open(config_path, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                    
+                logger.info("Added sitemap plugin to _config.yml")
+        else:
+            logger.warning("_config.yml not found, cannot add sitemap plugin")
+    
+    except Exception as e:
+        logger.error(f"Error creating sitemap: {str(e)}")
+
+def _create_robots_txt(repo_dir: Path, site_url: str) -> None:
+    """
+    Create a robots.txt file for the website.
+    
+    Args:
+        repo_dir: Path to the GitHub repository
+        site_url: URL of the site
+    """
+    try:
+        robots_path = repo_dir / "robots.txt"
+        
+        # Don't overwrite if already exists
+        if not robots_path.exists():
+            logger.info("Creating robots.txt file")
+            
+            content = f"""# robots.txt for {site_url}
+User-agent: *
+Allow: /
+
+Sitemap: {site_url}/sitemap.xml
+"""
+            
+            with open(robots_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+                
+            logger.info("Created robots.txt file")
+    
+    except Exception as e:
+        logger.error(f"Error creating robots.txt: {str(e)}")
 
 if __name__ == "__main__":
     main()
