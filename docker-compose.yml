@@ -1,0 +1,29 @@
+version: '3'
+
+services:
+  auto-blog:
+    build: 
+      context: .
+    image: auto-blog:latest
+    container_name: auto-blog
+    volumes:
+      # Store GitHub repository data
+      - auto-blog-repo:/app/github_repo
+      # Store logs
+      - auto-blog-logs:/app/logs
+      # Mount your .env file (create it from .env.example first)
+      - ./.env:/app/.env
+    # Default command is "run" which generates and publishes posts
+    # Alternatively, you can use:
+    #  - "push" to push all changes to GitHub
+    #  - "setup" to only setup the repository
+    #  - "shell" to get a shell in the container
+    command: run
+    # Set to 'always' if you want to restart on failure (for scheduled runs)
+    restart: "no"
+
+volumes:
+  auto-blog-repo:
+    # Persistent volume for the GitHub repository
+  auto-blog-logs:
+    # Persistent volume for logs 

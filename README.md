@@ -14,45 +14,30 @@ A fully automated system for generating and publishing daily tech news blog post
 
 ## Requirements
 
-- Python 3.8+
+- Python 3.8+ (standard method) OR Docker (containerized method)
 - GitHub account
 - API keys for AI providers (OpenAI and/or Google Gemini)
 - GitHub Personal Access Token with repo scope
 
 ## Quick Start
 
-### 1. Clone this Repository
+### Standard Method (with Python)
+
+1. **Clone this Repository**
 ```bash
 git clone https://github.com/yourusername/auto_blog.git
 cd auto_blog
 ```
 
-### 2. Configure Environment Variables
+2. **Configure Environment Variables**
 Copy the example environment file and fill in your details:
 ```bash
 cp auto_blog/.env.example .env
 ```
 
-Edit the `.env` file with your API keys and GitHub credentials:
-```
-# GitHub Configuration
-GITHUB_TOKEN=your_github_personal_access_token
-GITHUB_USERNAME=your_github_username
-GITHUB_REPO=your_blog_repository_name
-GITHUB_EMAIL=your_email@example.com
-GITHUB_BRANCH=main
+Edit the `.env` file with your API keys and GitHub credentials.
 
-# AI Provider Settings
-AI_PROVIDER=openai  # or gemini
-OPENAI_API_KEY=your_openai_api_key
-GEMINI_API_KEY=your_gemini_api_key
-
-# RSS Feed Configuration
-# Comma-separated list of RSS feed URLs
-RSS_FEEDS=https://techcrunch.com/feed/,https://www.theverge.com/rss/index.xml,https://arstechnica.com/feed/
-```
-
-### 3. Run the Setup Script
+3. **Run the Setup Script**
 This will create a virtual environment and set up the Minimal Mistakes blog repository:
 ```bash
 # On Linux/Mac
@@ -62,7 +47,7 @@ This will create a virtual environment and set up the Minimal Mistakes blog repo
 python setup.py
 ```
 
-### 4. Run the System
+4. **Run the System**
 Generate and publish blog posts:
 ```bash
 # On Linux/Mac
@@ -71,6 +56,41 @@ Generate and publish blog posts:
 # On Windows
 python run.py
 ```
+
+### Docker Method (cross-platform, including Android)
+
+For the easiest experience, especially on Android or other platforms, use our Docker container:
+
+1. **Get the Code and Configure**
+```bash
+git clone https://github.com/yourusername/auto_blog.git
+cd auto_blog
+cp .env.example .env
+# Edit .env with your credentials
+```
+
+2. **Build and Run with Docker**
+```bash
+# Build the Docker image
+./run-docker.sh build
+
+# Run the system
+./run-docker.sh run
+```
+
+That's it! The Docker container includes all dependencies and handles everything automatically.
+
+3. **For Android Users**
+```bash
+# Install and setup Docker on Termux
+./android-docker.sh setup
+
+# Build and run
+./android-docker.sh build
+./android-docker.sh run
+```
+
+See [DOCKER_USAGE.md](DOCKER_USAGE.md) for detailed Docker instructions.
 
 ### 5. Enable GitHub Pages
 1. Go to your GitHub repository
@@ -169,6 +189,12 @@ crontab -e
 4. Action: Start a Program
 5. Program/script: `C:\path\to\python.exe`
 6. Arguments: `C:\path\to\auto_blog\run.py`
+
+#### Docker Method (all platforms)
+```bash
+# Add to crontab
+0 8 * * * cd /path/to/auto_blog && ./run-docker.sh run >> logs/cron.log 2>&1
+```
 
 ## Troubleshooting
 

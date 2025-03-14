@@ -1,0 +1,47 @@
+FROM alpine:3.17
+
+# Set up working directory
+WORKDIR /app
+
+# Install minimal dependencies (Alpine uses apk instead of apt-get)
+RUN apk add --no-cache \
+    python3 \
+    py3-pip \
+    git \
+    ca-certificates \
+    tzdata \
+    curl \
+    && ln -sf python3 /usr/bin/python
+
+# Configure Git globally
+RUN git config --system credential.helper store && \
+    git config --system pull.rebase false && \
+    git config --system advice.detachedHead false
+
+# Copy requirements first to leverage Docker cache
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+# Copy the rest of the application
+COPY . .
+
+# Make scripts executable
+RUN chmod +x run_autoblog.py push_all.py docker-entrypoint.sh
+
+# Create necessary directories
+RUN mkdir -p github_repo logs data
+
+# Create a volume for persistent data (GitHub repo, logs, config)
+VOLUME ["/app/github_repo", "/app/logs", "/app/.env"]
+
+# Environment variable for non-interactive mode
+ENV PYTHONUNBUFFERED=1
+ENV GIT_TERMINAL_PROMPT=0
+
+# Set the entrypoint script
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
+
+# Default command (can be overridden)
+CMD ["run"] 

@@ -1,0 +1,58 @@
+# Virtual environment
+venv/
+env/
+ENV/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+*.so
+.Python
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Logs
+logs/
+*.log
+
+# Environment variables (will be mounted at runtime)
+.env
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Git files
+.git/
+.gitignore
+.gitattributes
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Docker specific files (to avoid recursive inclusion)
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# GitHub repository (will be created at runtime)
+github_repo/
+
+# Large files and archives
+*.zip
+*.tar
+*.tar.gz
+*.7z
+
+# Android specific files
+android_run.sh
+ANDROID_USAGE.md 
