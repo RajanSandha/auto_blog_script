@@ -5,7 +5,7 @@
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
 # Activate the virtual environment
-source "/var/www/html/github/auto_blog/venv/bin/activate"
+source "/var/www/html/github/auto_blog_script/venv/bin/activate"
 
 # Inform the user
 echo "Virtual environment activated. Run 'python run_autoblog.py' to start the system."
