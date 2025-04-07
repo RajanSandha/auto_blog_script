@@ -56,6 +56,27 @@ jobs:
 
       - name: Run Python Script
         env:
+          # AI Provider Settings
+          AI_PROVIDER: ${{ secrets.AI_PROVIDER }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
+          # RSS & Jekyll Config
+          RSS_FEEDS: ${{ secrets.RSS_FEEDS }}
+          MAX_RSS_ITEMS: ${{ secrets.MAX_RSS_ITEMS }}
+          MAX_ARTICLE_AGE_DAYS: ${{ secrets.MAX_ARTICLE_AGE_DAYS }}
+          JEKYLL_CATEGORIES: ${{ secrets.JEKYLL_CATEGORIES }}
+          JEKYLL_TAGS: ${{ secrets.JEKYLL_TAGS }}
+          AUTHOR_NAME: ${{ secrets.AUTHOR_NAME }}
+          SITE_URL: ${{ secrets.SITE_URL }}
+          # GitHub push config (for pushing code to another repo)
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_USERNAME: ${{ secrets._USERNAME }}
+          GITHUB_REPO: ${{ secrets._REPO }}
+          GITHUB_EMAIL: ${{ secrets._EMAIL }}
+          GITHUB_BRANCH: ${{ secrets._BRANCH }}
+          # Other settings (Ads/SEO etc.) if required...
           # Environment variables loaded from .env will be used by your script
           # Additional settings can be provided here if needed.
         run: |
