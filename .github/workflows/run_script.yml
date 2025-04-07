@@ -2,8 +2,8 @@ name: Run Python Script on Schedule
 
 on:
   # Uncomment the schedule below to run periodically.
-  # schedule:
-  #  - cron: "0 * * * *"  # runs hourly; adjust as needed
+  schedule:
+   - cron: "0 */3 * * *"  # runs every 3 hours
   workflow_dispatch:
 
 jobs:
