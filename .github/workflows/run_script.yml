@@ -2,7 +2,7 @@ name: Run Python Script on Schedule
 
 on:
   schedule:
-    - cron: "0 * * * *"  # runs hourly; adjust as needed
+    # - cron: "0 * * * *"  # runs hourly; adjust as needed
   workflow_dispatch:
 
 jobs:
