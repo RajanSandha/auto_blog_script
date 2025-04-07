@@ -46,7 +46,7 @@ jobs:
           GITHUB_REPO=${{ secrets._REPO }}
           GITHUB_EMAIL=${{ secrets._EMAIL }}
           GITHUB_BRANCH=${{ secrets._BRANCH }}
-          POSTS_PER_DAY=${{ secrets._PER_DAY }}
+          POSTS_PER_DAY=${{ secrets.POSTS_PER_DAY || '1' }}  # Default to 1 if not set
           EOF
         shell: bash
 
@@ -54,6 +54,7 @@ jobs:
         run: |
           git config --global user.name "${{ secrets._USERNAME }}"
           git config --global user.email "${{ secrets._EMAIL }}"
+          git remote set-url origin https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ secrets._USERNAME }}/${{ secrets._REPO }}.git
 
       - name: Run Python Script
         env:
