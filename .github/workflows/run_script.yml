@@ -1,7 +1,7 @@
 name: Run Python Script on Schedule
 
 on:
-  schedule:
+  # schedule:
     # - cron: "0 * * * *"  # runs hourly; adjust as needed
   workflow_dispatch:
 
