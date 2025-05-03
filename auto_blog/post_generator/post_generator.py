@@ -1,7 +1,6 @@
 """
 Post generator implementation for creating Jekyll-compatible blog posts.
 """
-
 import os
 import re
 import random
@@ -11,6 +10,7 @@ from typing import Dict, Any, List, Optional
 from pathlib import Path
 import yaml
 import shutil
+from ..utils.exceptions import PostCreationError, ImageProcessingError
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +32,9 @@ class PostGenerator:
             image_dir: Directory where images are stored
             available_categories: List of available categories for the blog
             available_tags: List of available tags for the blog
+            
+        Raises:
+            PostCreationError: If directories cannot be created
         """
         self.posts_dir = posts_dir
         self.site_url = site_url
@@ -41,8 +44,11 @@ class PostGenerator:
         self.available_tags = available_tags
         
         # Create the posts directory if it doesn't exist
-        os.makedirs(self.posts_dir, exist_ok=True)
-        logger.info(f"Post generator initialized with directory: {self.posts_dir}")
+        try:
+            os.makedirs(self.posts_dir, exist_ok=True)
+            logger.info(f"Post generator initialized with directory: {self.posts_dir}")
+        except OSError as e:
+            raise PostCreationError(f"Failed to create posts directory: {str(e)}")
     
     def create_post(self, content_data: Dict[str, Any], image_path: Optional[str] = None) -> Optional[str]:
         """
@@ -53,98 +59,146 @@ class PostGenerator:
             image_path: Path to the featured image for the post
             
         Returns:
-            Path to the created post file, or None if creation failed
+            Path to the created post file
+            
+        Raises:
+            PostCreationError: If post creation fails
+            ImageProcessingError: If image processing fails
         """
         try:
-            # Extract content data
+            # Extract and validate content data
             title = content_data.get('title', '')
             content = content_data.get('content', '')
-            tags = content_data.get('tags', [])
-            description = content_data.get('meta_description', '')
-            source_url = content_data.get('source_url', '')
-            source_name = content_data.get('source_name', '')
             
             if not title or not content:
-                logger.error("Cannot create post: missing title or content")
-                return None
+                raise PostCreationError("Cannot create post: missing title or content")
             
             # Generate filename with date and slug
             date = datetime.now()
             date_str = date.strftime('%Y-%m-%d')
             time_str = date.strftime('%H:%M:%S %z')
             slug = self._generate_slug(title)
-            filename = f"{date_str}-{slug}.md"  # Minimal mistakes uses .md extension
+            filename = f"{date_str}-{slug}.md"
             filepath = os.path.join(self.posts_dir, filename)
             
-            # Prepare relative image path if an image is provided
+            # Handle image processing
             image_relative_path = None
             if image_path:
-                # Get image path relative to the Jekyll site root
-                image_name = os.path.basename(image_path)
-                # Minimal-mistakes typically uses /assets/images/ for images
-                image_relative_path = f"/assets/images/{image_name}"
-                
-                # Make sure the image is in the assets/images directory
-                assets_img_dir = os.path.join(os.path.dirname(self.posts_dir), "assets/images")
-                os.makedirs(assets_img_dir, exist_ok=True)
-                
-                # Check if the image is already in the assets/images directory
-                target_image_path = os.path.join(assets_img_dir, image_name)
-                image_abs_path = os.path.abspath(image_path)
-                target_abs_path = os.path.abspath(target_image_path)
-                
-                # Only copy if the source and destination are different
-                if image_abs_path != target_abs_path:
-                    shutil.copy2(image_path, target_image_path)
-                    logger.info(f"Copied image from {image_path} to {target_image_path}")
-                else:
-                    logger.info(f"Image already in correct location: {target_image_path}")
+                try:
+                    image_relative_path = self._process_image(image_path)
+                except Exception as e:
+                    raise ImageProcessingError(f"Failed to process image: {str(e)}")
             
-            # Process tags to be valid for Jekyll
-            processed_tags = self._process_tags(tags, max_tags=5)
+            # Process post metadata
+            processed_tags = self._process_tags(content_data.get('tags', []), max_tags=5)
             
-            # Prepare frontmatter in minimal-mistakes format
-            frontmatter = {
-                'title': title,
-                'date': f"{date_str} {time_str}",
-                'categories': self._select_categories(max_categories=2),
-                'tags': processed_tags,
-                'excerpt': description if description else f"{' '.join(content.split()[:30])}...",
-                'header': {
-                    'teaser': image_relative_path if image_relative_path else None
-                },
-                'toc': True,
-                'toc_sticky': True,
-                'classes': 'wide'
-            }
+            # Prepare frontmatter
+            frontmatter = self._prepare_frontmatter(
+                title=title,
+                date_str=date_str,
+                time_str=time_str,
+                description=content_data.get('meta_description', ''),
+                image_path=image_relative_path,
+                tags=processed_tags
+            )
             
-            # Remove None values from frontmatter
-            if frontmatter['header']['teaser'] is None:
-                del frontmatter['header']
+            # Add source attribution
+            content = self._add_source_attribution(
+                content,
+                content_data.get('source_url'),
+                content_data.get('source_name')
+            )
             
-            # Format frontmatter as YAML
-            frontmatter_yaml = yaml.dump(frontmatter, default_flow_style=False, sort_keys=False, allow_unicode=True)
-            
-            # Add source attribution at the end of the content
-            if source_url and source_name:
-                content += f"\n\n---\n\nSource: [{source_name}]({source_url})"
-            elif source_url:
-                content += f"\n\n---\n\nSource: [Original Article]({source_url})"
-            
-            # Combine frontmatter and content
-            post_content = f"---\n{frontmatter_yaml}---\n\n{content}"
-            
-            # Write to file
-            with open(filepath, 'w', encoding='utf-8') as f:
-                f.write(post_content)
+            # Write post content
+            try:
+                self._write_post_file(filepath, frontmatter, content)
+            except Exception as e:
+                raise PostCreationError(f"Failed to write post file: {str(e)}")
             
             logger.info(f"Created post {filepath}")
             return filepath
             
+        except (PostCreationError, ImageProcessingError) as e:
+            logger.error(str(e))
+            raise
         except Exception as e:
-            logger.error(f"Error creating post: {str(e)}")
-            return None
-    
+            error_msg = f"Unexpected error creating post: {str(e)}"
+            logger.error(error_msg)
+            raise PostCreationError(error_msg)
+
+    def _process_image(self, image_path: str) -> Optional[str]:
+        """
+        Process and move image to assets directory.
+        
+        Args:
+            image_path: Path to the source image
+            
+        Returns:
+            Relative path to the processed image
+            
+        Raises:
+            ImageProcessingError: If image processing fails
+        """
+        try:
+            # Get image name and prepare paths
+            image_name = os.path.basename(image_path)
+            assets_img_dir = os.path.join(os.path.dirname(self.posts_dir), "assets/images")
+            os.makedirs(assets_img_dir, exist_ok=True)
+            
+            target_image_path = os.path.join(assets_img_dir, image_name)
+            
+            # Only copy if source and destination are different
+            if os.path.abspath(image_path) != os.path.abspath(target_image_path):
+                shutil.copy2(image_path, target_image_path)
+                logger.info(f"Copied image to {target_image_path}")
+            
+            return f"/assets/images/{image_name}"
+            
+        except Exception as e:
+            raise ImageProcessingError(f"Image processing failed: {str(e)}")
+
+    def _prepare_frontmatter(self, title: str, date_str: str, time_str: str,
+                           description: str, image_path: Optional[str],
+                           tags: List[str]) -> Dict[str, Any]:
+        """Prepare post frontmatter."""
+        frontmatter = {
+            'title': title,
+            'date': f"{date_str} {time_str}",
+            'categories': self._select_categories(max_categories=2),
+            'tags': tags,
+            'excerpt': description if description else f"{' '.join(title.split()[:10])}...",
+            'toc': True,
+            'toc_sticky': True,
+            'classes': 'wide'
+        }
+        
+        if image_path:
+            frontmatter['header'] = {'teaser': image_path}
+        
+        return frontmatter
+
+    def _write_post_file(self, filepath: str, frontmatter: Dict[str, Any], content: str) -> None:
+        """Write post content to file with proper formatting."""
+        try:
+            frontmatter_yaml = yaml.dump(frontmatter, default_flow_style=False, 
+                                       sort_keys=False, allow_unicode=True)
+            post_content = f"---\n{frontmatter_yaml}---\n\n{content}"
+            
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write(post_content)
+        except Exception as e:
+            raise PostCreationError(f"Failed to write post file: {str(e)}")
+
+    def _add_source_attribution(self, content: str, source_url: Optional[str], 
+                              source_name: Optional[str]) -> str:
+        """Add source attribution to post content."""
+        if source_url:
+            if source_name:
+                content += f"\n\n---\n\nSource: [{source_name}]({source_url})"
+            else:
+                content += f"\n\n---\n\nSource: [Original Article]({source_url})"
+        return content
+
     def _generate_slug(self, title: str) -> str:
         """
         Generate a slug from the post title.
@@ -217,4 +271,4 @@ class PostGenerator:
                 processed_tags.extend(random.sample(remaining_tags, num_to_add))
         
         # Limit the number of tags
-        return processed_tags[:max_tags] 
+        return processed_tags[:max_tags]
