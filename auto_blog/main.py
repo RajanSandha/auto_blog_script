@@ -13,6 +13,8 @@ from typing import List, Dict, Any, Optional
 import time
 from PIL import Image, ImageDraw, ImageFont
 from dotenv import load_dotenv
+import requests
+import json
 
 # Import configuration and exceptions
 from . import config
@@ -113,7 +115,7 @@ def initialize_components(cfg: Dict[str, Any], repo_dir: Path) -> tuple:
             site_url=f"https://{cfg['github_username']}.github.io/{cfg['github_repo']}",
             author_name=cfg['github_username'],
             image_dir=str(images_dir),
-            available_categories=["Tech News", "AI", "Programming", "Web Development", "Data Science"],
+            available_categories=["Tech News", "AI", "Programming", "Web Development", "Data Science", "Daily News"],
             available_tags=["ai", "machine-learning", "programming", "web", "mobile", "cloud", "security", "data"]
         )
         
@@ -124,7 +126,7 @@ def initialize_components(cfg: Dict[str, Any], repo_dir: Path) -> tuple:
         raise AutoBlogError(f"Failed to initialize components: {str(e)}")
 
 def process_rss_item(item: Any, ai_generator: Any, image_handler: Any, 
-                    post_generator: Any, post_history: Any) -> Optional[str]:
+                    post_generator: Any, post_history: Any) -> Optional[tuple]:
     """
     Process a single RSS item into a blog post.
     
@@ -136,7 +138,7 @@ def process_rss_item(item: Any, ai_generator: Any, image_handler: Any,
         post_history: Post history tracker
         
     Returns:
-        Path to created post file or None if processing failed
+        Tuple of post path and automation data or None if processing failed
         
     Raises:
         ContentGenerationError: If AI content generation fails
@@ -176,25 +178,40 @@ def process_rss_item(item: Any, ai_generator: Any, image_handler: Any,
                 logger.warning(f"Image processing failed, continuing without image: {str(e)}")
         
         # Create post
-        post_path = post_generator.create_post(
+        post_path, automationData = post_generator.create_post(
             content_data={
                 'title': generated_content.get('title', item.title),
                 'content': generated_content.get('content', ''),
                 'tags': generated_content.get('tags', []),
                 'meta_description': generated_content.get('meta_description', item.description),
                 'source_url': item.link,
-                'source_name': item.source_name
+                'source_name': item.source_name,
+                'categories': generated_content.get('categories', []),
+                'keywords': generated_content.get('keywords', [])
             },
             image_path=image_path
         )
+    
         
-        return post_path
+        return (post_path, automationData)
         
     except (ContentGenerationError, ImageProcessingError, PostCreationError) as e:
         logger.error(f"Failed to process item {item.title}: {str(e)}")
         raise
     except Exception as e:
         raise AutoBlogError(f"Unexpected error processing item {item.title}: {str(e)}")
+
+def send_to_automation(automationData: Dict[str, Any]) -> None:
+    """
+    Send data to Zapier/Make webhook using requests library.
+    """
+    automation_url = os.getenv("MAKE_WEBHOOK_URL")
+    headers = { "Content-Type": "application/json" }
+    response = requests.post(automation_url, headers=headers, data=json.dumps(automationData))
+    if response.status_code != 200:
+        logger.error(f"Failed to send data to Zapier: {response.status_code} - {response.text}")
+        raise Exception(f"Failed to send data to Zapier: {response.status_code} - {response.text}")
+    logger.info(f"Sent data to Zapier: {response.status_code} - {response.text}")
 
 def main():
     """
@@ -245,18 +262,19 @@ def main():
         num_posts = min(len(unprocessed_items), posts_per_day)
         created_post_paths = []
         processed_urls = []
+        automation_payloads = []
         
         # Process items and create posts
         for item in unprocessed_items[:num_posts]:
             try:
-                post_path = process_rss_item(
+                result = process_rss_item(
                     item, ai_generator, image_handler, post_generator, post_history
                 )
-                
-                if post_path:
+                if result:
+                    post_path, automationData = result
                     created_post_paths.append(post_path)
                     processed_urls.append(item.link)
-                    
+                    automation_payloads.append(automationData)
             except AutoBlogError as e:
                 logger.error(f"Failed to process item: {str(e)}")
                 continue
@@ -271,6 +289,13 @@ def main():
             if not github_manager.commit_and_push_changes(commit_message):
                 logger.error("Failed to commit and push changes")
                 return
+            
+            # Send automation webhook(s) after successful push
+            for automationData in automation_payloads:
+                try:
+                    send_to_automation(automationData)
+                except Exception as e:
+                    logger.error(f"Automation webhook failed: {str(e)}")
         
         # Log completion stats
         stats = post_history.get_stats()

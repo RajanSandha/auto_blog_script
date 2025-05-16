@@ -50,7 +50,7 @@ class PostGenerator:
         except OSError as e:
             raise PostCreationError(f"Failed to create posts directory: {str(e)}")
     
-    def create_post(self, content_data: Dict[str, Any], image_path: Optional[str] = None) -> Optional[str]:
+    def create_post(self, content_data: Dict[str, Any], image_path: Optional[str] = None) -> Optional[tuple]:
         """
         Create a Jekyll-compatible blog post for minimal-mistakes theme.
         
@@ -115,29 +115,27 @@ class PostGenerator:
             try:
                 self._write_post_file(filepath, frontmatter, content)
 
-                #create post link and send it to zapier webhook
-                post_link = f"{os.getenv('SITE_URL')}{f'/{frontmatter["categories"][0]}' if frontmatter.get
-                ('categories') else ''}/{slug}"
-                image_path = f"{os.getenv('SITE_URL')}{image_relative_path}" if image_relative_path else None
+                # Prepare automation data (do not send here)
+                post_link = f"{os.getenv('SITE_URL')}{f'/{frontmatter['categories'][0]}' if frontmatter.get('categories') else ''}/{slug}"
+                image_path_full = f"{os.getenv('SITE_URL')}{image_relative_path}" if image_relative_path else None
                 automationData = {
                     "site_url": os.getenv("SITE_URL"),
                     "title": title,
                     "description": content_data.get('meta_description', ''),
                     "post_slug": slug,
-                    "image_path": image_path,
+                    "image_path": image_path_full,
                     "tags": processed_tags,
                     "hashtags": self._process_hashtags(processed_tags),
                     "categories": frontmatter['categories'],
                     "post_link": post_link
                 }
-                # send data to zapier webhook
-                self._send_to_automation(automationData)
+
+                logger.info(f"Created post {filepath}")
+                # Return both post path and automation data
+                return filepath, automationData
 
             except Exception as e:
                 raise PostCreationError(f"Failed to write post file: {str(e)}")
-            
-            logger.info(f"Created post {filepath}")
-            return filepath
             
         except (PostCreationError, ImageProcessingError) as e:
             logger.error(str(e))
