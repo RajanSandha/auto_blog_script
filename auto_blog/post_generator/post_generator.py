@@ -10,7 +10,7 @@ from typing import Dict, Any, List, Optional
 from pathlib import Path
 import yaml
 import shutil
-from ..utils.exceptions import PostCreationError, ImageProcessingError
+from ..utils.exceptions import PostCreationError, ImageProcessingError, ZapierError
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +99,9 @@ class PostGenerator:
                 time_str=time_str,
                 description=content_data.get('meta_description', ''),
                 image_path=image_relative_path,
-                tags=processed_tags
+                tags=processed_tags,
+                categories=content_data.get('categories', []),
+                keywords=content_data.get('keywords', [])
             )
             
             # Add source attribution
@@ -112,6 +114,25 @@ class PostGenerator:
             # Write post content
             try:
                 self._write_post_file(filepath, frontmatter, content)
+
+                #create post link and send it to zapier webhook
+                post_link = f"{os.getenv('SITE_URL')}{f'/{frontmatter["categories"][0]}' if frontmatter.get
+                ('categories') else ''}/{slug}"
+                image_path = f"{os.getenv('SITE_URL')}{image_relative_path}" if image_relative_path else None
+                automationData = {
+                    "site_url": os.getenv("SITE_URL"),
+                    "title": title,
+                    "description": content_data.get('meta_description', ''),
+                    "post_slug": slug,
+                    "image_path": image_path,
+                    "tags": processed_tags,
+                    "hashtags": self._process_hashtags(processed_tags),
+                    "categories": frontmatter['categories'],
+                    "post_link": post_link
+                }
+                # send data to zapier webhook
+                self._send_to_automation(automationData)
+
             except Exception as e:
                 raise PostCreationError(f"Failed to write post file: {str(e)}")
             
@@ -125,6 +146,40 @@ class PostGenerator:
             error_msg = f"Unexpected error creating post: {str(e)}"
             logger.error(error_msg)
             raise PostCreationError(error_msg)
+        
+    def _process_hashtags(self, tags: List[str]) -> str:
+        """
+        Convert array of tags to string hashtags joined by space.
+        
+        Args:
+            tags: List of tag strings
+            
+        Returns:
+            String of hashtags joined by spaces, with '#' prefix added.
+            Returns empty string if tags list is empty.
+        """
+        if not tags:
+            return ''
+        return ' '.join(['#' + tag.strip('#') for tag in tags])
+        
+    def _send_to_automation(self, automationData: Dict[str, Any]) -> None:
+        """
+        Send data to Zapier webhook.
+        """
+        # TODO: Implement Zapier webhook sending using requests library
+        import requests
+        import json
+
+        #get zapier webhook url from environment variable
+        automation_url = os.getenv("MAKE_WEBHOOK_URL")
+        headers = { 
+            "Content-Type": "application/json"
+        }
+        response = requests.post(automation_url, headers=headers, data=json.dumps(automationData))
+        if response.status_code != 200:
+            logger.error(f"Failed to send data to Zapier: {response.status_code} - {response.text}")
+            raise ZapierError(f"Failed to send data to Zapier: {response.status_code} - {response.text}")
+        logger.info(f"Sent data to Zapier: {response.status_code} - {response.text}")
 
     def _process_image(self, image_path: str) -> Optional[str]:
         """
@@ -159,17 +214,18 @@ class PostGenerator:
 
     def _prepare_frontmatter(self, title: str, date_str: str, time_str: str,
                            description: str, image_path: Optional[str],
-                           tags: List[str]) -> Dict[str, Any]:
+                           tags: List[str], categories: List[str], keywords: List[str]) -> Dict[str, Any]:
         """Prepare post frontmatter."""
         frontmatter = {
             'title': title,
             'date': f"{date_str} {time_str}",
-            'categories': self._select_categories(max_categories=2),
+            'categories': self._select_categories(max_categories=1, categories=categories),
             'tags': tags,
             'excerpt': description if description else f"{' '.join(title.split()[:10])}...",
             'toc': True,
             'toc_sticky': True,
-            'classes': 'wide'
+            'classes': 'wide',
+            'keywords': keywords
         }
         
         if image_path:
@@ -216,7 +272,7 @@ class PostGenerator:
         # Limit length
         return slug[:50]
     
-    def _select_categories(self, max_categories: int = 2) -> List[str]:
+    def _select_categories(self, max_categories: int = 2, categories: List[str] = []) -> List[str]:
         """
         Select random categories from available categories.
         
@@ -227,7 +283,10 @@ class PostGenerator:
             List of selected categories
         """
         num_categories = min(max_categories, len(self.available_categories))
-        return random.sample(self.available_categories, num_categories)
+        if categories:
+            return random.sample(categories, num_categories)
+        else:
+            return random.sample(self.available_categories, num_categories)
     
     def _process_tags(self, suggested_tags: List[str], max_tags: int = 5) -> List[str]:
         """
@@ -256,8 +315,8 @@ class PostGenerator:
             clean_tag = re.sub(r'[\s_-]+', '-', clean_tag.strip())
             
             # If the tag is in our available tags, add it
-            if clean_tag.lower() in available_tags_lower:
-                processed_tags.append(clean_tag)
+            # if clean_tag.lower() in available_tags_lower:
+            processed_tags.append(clean_tag)
         
         # If we don't have enough tags, add some from our available tags
         if len(processed_tags) < max_tags:

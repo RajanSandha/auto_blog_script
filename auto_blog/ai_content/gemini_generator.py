@@ -84,7 +84,9 @@ class GeminiGenerator(AIGenerator):
             "title": "Your suggested title",
             "content": "The full blog post content in markdown format",
             "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
-            "meta_description": "A concise meta description (150-160 characters)"
+            "meta_description": "A concise meta description (150-160 characters)",
+            "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
+            "categories": ["category1", "category2", "category3", "category4", "category5"]
         }}
         
         Return only valid JSON without any explanation or other text.
@@ -101,66 +103,52 @@ class GeminiGenerator(AIGenerator):
                 "top_k": 40,
                 "max_output_tokens": 2048,
             }
-            
-            # Generate content
-            response = model.generate_content(
-                prompt,
-                generation_config=generation_config
-            )
-            
-            # Parse the response text to extract JSON
-            try:
-                # Clean up response to extract valid JSON
+
+            def _generate_and_parse():
+                """
+                Helper function to generate content and parse JSON. Returns (result_dict, error_msg).
+                """
+                response = model.generate_content(
+                    prompt,
+                    generation_config=generation_config
+                )
                 content_text = response.text
-                
-                # Find JSON within the response text if it's not pure JSON
                 json_start = content_text.find('{')
                 json_end = content_text.rfind('}') + 1
-                
                 if json_start >= 0 and json_end > json_start:
                     json_content = content_text[json_start:json_end]
-                    result = json.loads(json_content)
+                    try:
+                        result = json.loads(json_content)
+                        return result, None
+                    except json.JSONDecodeError as json_err:
+                        return None, f"JSONDecodeError: {str(json_err)}"
                 else:
-                    # In case no JSON structure is found, create a simple one
-                    result = {
-                        "title": title,
-                        "content": content_text,
-                        "tags": categories or [],
-                        "meta_description": description
-                    }
-                
-                logger.info(f"Successfully generated blog post: {result.get('title', '')}")
-                
-                # Return the blog post information
-                return {
-                    "title": result.get("title", title),
-                    "content": result.get("content", ""),
-                    "tags": result.get("tags", []),
-                    "meta_description": result.get("meta_description", ""),
-                    "source_url": source_url,
-                    "source_name": source_name
-                }
-            
-            except json.JSONDecodeError as json_err:
-                logger.error(f"Error parsing Gemini response as JSON: {str(json_err)}")
-                # Create a basic response with the entire text
-                return {
-                    "title": title,
-                    "content": response.text,
-                    "tags": categories or [],
-                    "meta_description": description[:160],
-                    "source_url": source_url,
-                    "source_name": source_name
-                }
-            
+                    # No JSON found at all
+                    return None, "No JSON structure found in response."
+
+            # First attempt
+            result, error_msg = _generate_and_parse()
+            if result is None:
+                logger.warning(f"First attempt to parse Gemini response failed: {error_msg}. Retrying once...")
+                # Retry once more
+                result, error_msg = _generate_and_parse()
+                if result is None:
+                    logger.error(f"Second attempt to parse Gemini response failed: {error_msg}")
+                    # throw an error
+                    raise Exception(f"Gemini response could not be parsed as JSON after 2 attempts: {error_msg}")
+
+            logger.info(f"Successfully generated blog post: {result.get('title', '')}")
+            # Return the blog post information
+            return {
+                "title": result.get("title", title),
+                "content": result.get("content", ""),
+                "tags": result.get("tags", []),
+                "meta_description": result.get("meta_description", ""),
+                "source_url": source_url,
+                "source_name": source_name,
+                "categories": result.get("categories", []),
+                "keywords": result.get("keywords", [])
+            }
         except Exception as e:
             logger.error(f"Error generating content with Gemini: {str(e)}")
-            # Return a minimal response in case of error
-            return {
-                "title": title,
-                "content": f"Failed to generate content: {str(e)}",
-                "tags": [],
-                "meta_description": description,
-                "source_url": source_url,
-                "source_name": source_name
-            } 
+            raise Exception(f"Error generating content with Gemini: {str(e)}")

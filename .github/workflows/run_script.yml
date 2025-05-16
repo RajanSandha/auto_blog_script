@@ -47,6 +47,8 @@ jobs:
           GITHUB_EMAIL=${{ secrets._EMAIL }}
           GITHUB_BRANCH=${{ secrets._BRANCH }}
           POSTS_PER_DAY=${{ secrets.POSTS_PER_DAY || '1' }}  # Default to 1 if not set
+          ZAPIER_WEBHOOK_URL=${{ secrets.ZAPIER_WEBHOOK_URL }}
+          MAKE_WEBHOOK_URL=${{ secrets.MAKE_WEBHOOK_URL }}
           EOF
         shell: bash
 
@@ -81,5 +83,7 @@ jobs:
           # Other settings (Ads/SEO etc.) if required...
           # Environment variables loaded from .env will be used by your script
           # Additional settings can be provided here if needed.
+          ZAPIER_WEBHOOK_URL: ${{ secrets.ZAPIER_WEBHOOK_URL }}
+          MAKE_WEBHOOK_URL: ${{ secrets.MAKE_WEBHOOK_URL }}
         run: |
           python run.py

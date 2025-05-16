@@ -25,3 +25,7 @@ class JSONParsingError(AutoBlogError):
 class AIProviderError(AutoBlogError):
     """Raised when there are issues with AI provider integration."""
     pass
+
+class ZapierError(AutoBlogError):
+    """Raised when there are issues with Zapier integration."""
+    pass
