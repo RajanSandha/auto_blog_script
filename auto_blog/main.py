@@ -291,11 +291,11 @@ def main():
                 return
             
             # Send automation webhook(s) after successful push
-            for automationData in automation_payloads:
-                try:
-                    send_to_automation(automationData)
-                except Exception as e:
-                    logger.error(f"Automation webhook failed: {str(e)}")
+            # for automationData in automation_payloads:
+            #     try:
+            #         send_to_automation(automationData)
+            #     except Exception as e:
+            #         logger.error(f"Automation webhook failed: {str(e)}")
         
         # Log completion stats
         stats = post_history.get_stats()
