@@ -117,7 +117,7 @@ class PostGenerator:
 
                 # Prepare automation data (do not send here)
                 post_link = f"{os.getenv('SITE_URL')}{f'/{frontmatter['categories'][0]}' if frontmatter.get('categories') else ''}/{slug}"
-                image_path_full = f"{os.getenv('SITE_URL')}{image_relative_path}" if image_relative_path else None
+                image_path_full = (f"{os.getenv('SITE_URL')}{image_relative_path}").lower() if image_relative_path else None
                 automationData = {
                     "site_url": os.getenv("SITE_URL"),
                     "title": title,
@@ -127,10 +127,11 @@ class PostGenerator:
                     "tags": processed_tags,
                     "hashtags": self._process_hashtags(processed_tags),
                     "categories": frontmatter['categories'],
-                    "post_link": post_link
+                    "post_link": post_link.lower()
                 }
 
                 logger.info(f"Created post {filepath}")
+                logger.info(f"Automation data: {automationData}")
                 # Return both post path and automation data
                 return filepath, automationData
 
@@ -158,7 +159,7 @@ class PostGenerator:
         """
         if not tags:
             return ''
-        return ' '.join(['#' + tag.strip('#') for tag in tags])
+        return ' '.join(['#' + tag.strip('#').lower() for tag in tags])
         
     def _send_to_automation(self, automationData: Dict[str, Any]) -> None:
         """
