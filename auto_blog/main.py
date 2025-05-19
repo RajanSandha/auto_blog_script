@@ -28,7 +28,7 @@ from .image_handler import ImageHandler
 from .post_generator import PostGenerator
 from .github_manager import GitHubManager
 from .utils import create_directory, PostHistory
-
+from .webhook_handler import wehbook_handler
 # Set up logging
 log_dir = Path(__file__).parent.parent / "logs"
 create_directory(str(log_dir))
@@ -87,7 +87,7 @@ def initialize_components(cfg: Dict[str, Any], repo_dir: Path) -> tuple:
             max_age_days=cfg['max_article_age_days'],
             feed_timeout=15,
             article_timeout=8,
-            known_problematic_feeds=['wired.com']
+            known_problematic_feeds=[]
         )
         
         # Initialize AI content generator
@@ -201,18 +201,6 @@ def process_rss_item(item: Any, ai_generator: Any, image_handler: Any,
     except Exception as e:
         raise AutoBlogError(f"Unexpected error processing item {item.title}: {str(e)}")
 
-def send_to_automation(automationData: Dict[str, Any]) -> None:
-    """
-    Send data to Zapier/Make webhook using requests library.
-    """
-    automation_url = os.getenv("MAKE_WEBHOOK_URL")
-    headers = { "Content-Type": "application/json" }
-    response = requests.post(automation_url, headers=headers, data=json.dumps(automationData))
-    if response.status_code != 200:
-        logger.error(f"Failed to send data to Zapier: {response.status_code} - {response.text}")
-        raise Exception(f"Failed to send data to Zapier: {response.status_code} - {response.text}")
-    logger.info(f"Sent data to Zapier: {response.status_code} - {response.text}")
-
 def main():
     """
     Main function to run the automated blog system.
@@ -239,14 +227,17 @@ def main():
         # Fetch RSS feeds
         all_items = rss_fetcher.fetch_all_feeds()
         logger.info(f"Fetched {len(all_items)} items from RSS feeds")
+
+        # Get processed URLs from webhook data
+        webhook_processed_urls = wehbook_handler.call_webhook({
+            "action": "get",
+        }, os.getenv("WEBHOOK_DATA_URL"))
+        logger.info(f"Got {len(webhook_processed_urls)} processed URLs from webhook")
         
-        # Filter out processed items
-        unprocessed_items = [
-            item for item in all_items 
-            if not post_history.is_url_processed(item.link)
-        ]
-        logger.info(f"{len(unprocessed_items)} unprocessed items remaining")
-        
+        # Filter out items that have been processed according to webhook
+        unprocessed_items = wehbook_handler.filter_unprocessed_items(all_items, webhook_processed_urls)
+        logger.info(f"{len(unprocessed_items)} items remaining after webhook filter")
+                
         if not unprocessed_items:
             logger.info("No new articles to process")
             return
@@ -281,7 +272,6 @@ def main():
         
         # Update post history and commit changes
         if processed_urls:
-            post_history.add_processed_urls(processed_urls)
             
             current_date = datetime.now().strftime('%Y-%m-%d')
             commit_message = f"Add {len(created_post_paths)} new blog post(s) for {current_date}"
@@ -289,18 +279,14 @@ def main():
             if not github_manager.commit_and_push_changes(commit_message):
                 logger.error("Failed to commit and push changes")
                 return
-            
-            # Send automation webhook(s) after successful push
-            # for automationData in automation_payloads:
-            #     try:
-            #         send_to_automation(automationData)
-            #     except Exception as e:
-            #         logger.error(f"Automation webhook failed: {str(e)}")
-        
-        # Log completion stats
-        stats = post_history.get_stats()
-        logger.info(f"Post history stats: {stats['total_processed']} total, "
-                   f"{stats['recent_processed']} in last 7 days")
+
+            for url in processed_urls:
+                #Add processed urls to webhook data
+                wehbook_handler.call_webhook({
+                    "action": "set",
+                    "source_url": url
+                }, os.getenv("WEBHOOK_DATA_URL"))
+
         logger.info("Automated blog system completed successfully")
         
     except AutoBlogError as e:

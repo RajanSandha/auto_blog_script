@@ -74,7 +74,7 @@ class RSSFetcher:
         self.problematic_feeds = known_problematic_feeds or []
         # Add common known problematic feeds if not explicitly provided
         if known_problematic_feeds is None:
-            self.problematic_feeds = ['wired.com']  # Add others as you identify them
+            self.problematic_feeds = []  # Add others as you identify them
         
         # A dictionary to keep track of feed timeout occurrences
         self.feed_timeout_count = {}

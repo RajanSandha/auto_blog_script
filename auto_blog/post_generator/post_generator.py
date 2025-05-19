@@ -160,25 +160,6 @@ class PostGenerator:
         if not tags:
             return ''
         return ' '.join(['#' + tag.strip('#').lower() for tag in tags])
-        
-    def _send_to_automation(self, automationData: Dict[str, Any]) -> None:
-        """
-        Send data to Zapier webhook.
-        """
-        # TODO: Implement Zapier webhook sending using requests library
-        import requests
-        import json
-
-        #get zapier webhook url from environment variable
-        automation_url = os.getenv("MAKE_WEBHOOK_URL")
-        headers = { 
-            "Content-Type": "application/json"
-        }
-        response = requests.post(automation_url, headers=headers, data=json.dumps(automationData))
-        if response.status_code != 200:
-            logger.error(f"Failed to send data to Zapier: {response.status_code} - {response.text}")
-            raise ZapierError(f"Failed to send data to Zapier: {response.status_code} - {response.text}")
-        logger.info(f"Sent data to Zapier: {response.status_code} - {response.text}")
 
     def _process_image(self, image_path: str) -> Optional[str]:
         """
