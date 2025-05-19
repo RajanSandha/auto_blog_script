@@ -75,6 +75,9 @@ JEKYLL_TAGS = get_env_value('JEKYLL_TAGS', 'tech,news,programming,ai,development
 AUTHOR_NAME = get_env_value('AUTHOR_NAME', 'Blog Author')
 SITE_URL = get_env_value('SITE_URL', f'https://{GITHUB_USERNAME}.github.io')
 
+# Webhook Settings
+WEBHOOK_DATA_LINK = get_env_value('WEBHOOK_DATA_LINK', '')
+
 def validate_config() -> List[str]:
     """
     Validate the loaded configuration.
@@ -143,4 +146,7 @@ def get_config() -> Dict[str, Any]:
         'jekyll_tags': JEKYLL_TAGS,
         'author_name': AUTHOR_NAME,
         'site_url': SITE_URL,
+
+        # Webhook Settings
+        'webhook_data_link': WEBHOOK_DATA_LINK
     }

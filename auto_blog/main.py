@@ -231,7 +231,7 @@ def main():
         # Get processed URLs from webhook data
         webhook_processed_urls = wehbook_handler.call_webhook({
             "action": "get",
-        }, os.getenv("WEBHOOK_DATA_URL"))
+        }, os.getenv("WEBHOOK_DATA_LINK"))
         logger.info(f"Got {len(webhook_processed_urls)} processed URLs from webhook")
         
         # Filter out items that have been processed according to webhook
@@ -285,7 +285,7 @@ def main():
                 wehbook_handler.call_webhook({
                     "action": "set",
                     "source_link": url
-                }, os.getenv("WEBHOOK_DATA_URL"))
+                }, os.getenv("WEBHOOK_DATA_LINK"))
 
         logger.info("Automated blog system completed successfully")
         
