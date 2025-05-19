@@ -284,7 +284,7 @@ def main():
                 #Add processed urls to webhook data
                 wehbook_handler.call_webhook({
                     "action": "set",
-                    "source_url": url
+                    "source_link": url
                 }, os.getenv("WEBHOOK_DATA_URL"))
 
         logger.info("Automated blog system completed successfully")

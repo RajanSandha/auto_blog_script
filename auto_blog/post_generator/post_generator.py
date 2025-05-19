@@ -129,9 +129,7 @@ class PostGenerator:
                     "categories": frontmatter['categories'],
                     "post_link": post_link.lower()
                 }
-
-                logger.info(f"Created post {filepath}")
-                logger.info(f"Automation data: {automationData}")
+                
                 # Return both post path and automation data
                 return filepath, automationData
 
