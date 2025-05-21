@@ -53,8 +53,8 @@ class GeminiGenerator(AIGenerator):
         
         # Prepare the prompt
         prompt = f"""
-        You are a professional tech blog writer. Your task is to create a well-structured, 
-        {style} blog post based on the information provided. 
+        You are a professional tech blog writer. Your task is to create a well-structured, warm, humanized, 
+        {style} blog post based on the information provided. Use clear, everyday language and an encouraging, forward-thinking tone.
         
         The blog post should be:
         - Around {max_words} words
@@ -86,10 +86,13 @@ class GeminiGenerator(AIGenerator):
             "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
             "meta_description": "A concise meta description (150-160 characters)",
             "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
-            "categories": ["category1", "category2", "category3", "category4", "category5"]
+            "categories": ["category1", "category2", "category3", "category4", "category5"],
+            "relevant_to_niche": true  # Boolean: true if the topic is relevant to our niche (tech, software, programming, artificial intelligence and more.), false otherwise
+
         }}
         
-        Return only valid JSON without any explanation or other text.
+        Return only valid JSON without any explanation or other text.Only generate blogs relevant to Tech, Software, and Programming. Do not create posts about gaming, TV series, deals, offers, promotions, or unrelated topics. Always set relevant_to_niche accordingly: true when the content fits our tech-focused niche, false when it does not. Based on that flag, you can skip writing non-relevant posts or mark them clearly.
+
         """
         
         try:
@@ -147,7 +150,8 @@ class GeminiGenerator(AIGenerator):
                 "source_url": source_url,
                 "source_name": source_name,
                 "categories": result.get("categories", []),
-                "keywords": result.get("keywords", [])
+                "keywords": result.get("keywords", []),
+                "relevant_to_niche": result.get("relevant_to_niche", True)  # Include the relevance flag
             }
         except Exception as e:
             logger.error(f"Error generating content with Gemini: {str(e)}")

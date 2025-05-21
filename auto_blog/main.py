@@ -138,7 +138,7 @@ def process_rss_item(item: Any, ai_generator: Any, image_handler: Any,
         post_history: Post history tracker
         
     Returns:
-        Tuple of post path and automation data or None if processing failed
+        Tuple of post path and automation data or None if processing failed or content not relevant
         
     Raises:
         ContentGenerationError: If AI content generation fails
@@ -166,6 +166,11 @@ def process_rss_item(item: Any, ai_generator: Any, image_handler: Any,
             max_words=1200,
             style="informative and engaging"
         )
+        
+        # Check if content is relevant to our niche
+        if not generated_content.get('relevant_to_niche', True):
+            logger.info(f"Article '{item.title}' not relevant to niche, skipping")
+            return None
         
         # Process image if available
         image_path = None
@@ -255,20 +260,47 @@ def main():
         processed_urls = []
         automation_payloads = []
         
-        # Process items and create posts
-        for item in unprocessed_items[:num_posts]:
-            try:
-                result = process_rss_item(
-                    item, ai_generator, image_handler, post_generator, post_history
-                )
-                if result:
-                    post_path, automationData = result
-                    created_post_paths.append(post_path)
-                    processed_urls.append(item.link)
-                    automation_payloads.append(automationData)
-            except AutoBlogError as e:
-                logger.error(f"Failed to process item: {str(e)}")
-                continue
+        # Process items and create posts with retry logic
+        current_item_idx = 0
+        successfully_processed = 0
+        
+        while successfully_processed < num_posts and current_item_idx < len(unprocessed_items):
+            max_retries = 2  # Maximum number of retries per post
+            retry_count = 0
+            success = False
+            
+            while not success and retry_count < max_retries:
+                if current_item_idx >= len(unprocessed_items):
+                    logger.warning("Ran out of unprocessed items to try")
+                    break
+                    
+                item = unprocessed_items[current_item_idx]
+                current_item_idx += 1
+                
+                if retry_count > 0:
+                    logger.info(f"Retrying with new item after delay (attempt {retry_count+1})")
+                    time.sleep(5)  # Delay for 5 seconds between retries
+                
+                try:
+                    result = process_rss_item(
+                        item, ai_generator, image_handler, post_generator, post_history
+                    )
+                    
+                    if result:  # Post was successfully created and is relevant
+                        post_path, automationData = result
+                        created_post_paths.append(post_path)
+                        processed_urls.append(item.link)
+                        automation_payloads.append(automationData)
+                        success = True
+                        successfully_processed += 1
+                        logger.info(f"Successfully processed item {item.title}")
+                    else:
+                        logger.info(f"Item {item.title} was not relevant, trying another")
+                        retry_count += 1
+                        
+                except AutoBlogError as e:
+                    logger.error(f"Failed to process item: {str(e)}")
+                    retry_count += 1
         
         # Update post history and commit changes
         if processed_urls:
