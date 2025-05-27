@@ -53,46 +53,39 @@ class GeminiGenerator(AIGenerator):
         
         # Prepare the prompt
         prompt = f"""
-        You are a professional tech blog writer. Your task is to create a well-structured, warm, humanized, 
-        {style} blog post based on the information provided. Use clear, everyday language and an encouraging, forward-thinking tone.
-        
-        The blog post should be:
-        - Around {max_words} words
-        - In a {style} style
-        - Well-structured with headings, subheadings, and paragraphs
-        - Include appropriate HTML formatting for headings (h2, h3, etc.) and emphasis
-        - Written in your own words while maintaining factual accuracy
-        - Include a proper introduction and conclusion
-        
-        Here is the information about the article to rewrite:
-        
-        Original Title: {title}
-        Source: {source_name}
-        Original URL: {source_url}
-        
-        Original Description: {description}
-        
-        Categories/Tags: {', '.join(categories) if categories else 'Not provided'}
-        
-        Original Content:
-        {original_content[:6000]}  # Limit content length to fit within context window
-        
-        Based on this information, create a unique and engaging blog post. 
-        Format your response using the following JSON structure:
-        
+        You are a professional tech blog writer. Your job is to take the dynamic information provided below and decide whether it belongs in our niche (tech news, software, programming, AI, emerging technologies). Do not write about sales, price drops, Amazon deals, promotions, or unrelated topics.
+
+        If relevant_to_niche is true, produce a friendly, humanized, forward-thinking blog post of around {max_words} words in {style} style, optimized for SEO with all provided keywords, and structured according to best practices:
+
+        -HTML headings (<h2>, <h3>, etc.) and emphasis tags.
+        -Introduction that incorporates primary keywords naturally.
+        -Logical sectioning with H2 and H3 subheadings that reflect search intent.
+        -Short paragraphs, bullet points or numbered lists where helpful.
+        -Internal or external link placeholders (e.g., [link text](URL)) to enhance authority.
+        -Conclusion with a clear call-to-action or summary.
+        -Title tag, meta description (150–160 characters), and URL slug reflecting primary keywords.
+        -Keyword density: use each SEO keyword at least once, but maintain readability.
+        -If relevant_to_niche is false, return the JSON with empty strings or empty arrays for all fields except "relevant_to_niche": false.
+        -Always return only this JSON structure (no extra text):        
         {{
-            "title": "Your suggested title",
-            "content": "The full blog post content in markdown format",
+            "title": "suggested SEO-optimized title or '' if not relevant",
+            "content": "full markdown blog post or "" if not relevant",
             "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
-            "meta_description": "A concise meta description (150-160 characters)",
+            "meta_description": "150–160 char SEO-friendly description or "" if not relevant",
             "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
             "categories": ["category1", "category2", "category3", "category4", "category5"],
-            "relevant_to_niche": true  # Boolean: true if the topic is relevant to our niche (tech, software, programming, artificial intelligence and more.), false otherwise
+            "relevant_to_niche": true  # Boolean: true if the topic is relevant to our niche (tech news, software, programming, AI, emerging technologies), false otherwise
 
         }}
         
-        Return only valid JSON without any explanation or other text.Only generate blogs relevant to Tech, Software, and Programming. Do not create posts about gaming, TV series, deals, offers, promotions, or unrelated topics. Always set relevant_to_niche accordingly: true when the content fits our tech-focused niche, false when it does not. Based on that flag, you can skip writing non-relevant posts or mark them clearly.
-
+        Here is the information about the article to rewrite:
+        Original Title: {title}
+        Source: {source_name}
+        Original URL: {source_url}
+        Original Description: {description}
+        Categories/Tags: {', '.join(categories) if categories else 'Not provided'}
+        Original Content:
+        {original_content[:6000]}  # Limit content length to fit within context window
         """
         
         try:
