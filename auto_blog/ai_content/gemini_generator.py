@@ -61,7 +61,7 @@ class GeminiGenerator(AIGenerator):
         -Introduction that incorporates primary keywords naturally.
         -Logical sectioning with H2 and H3 subheadings that reflect search intent.
         -Short paragraphs, bullet points or numbered lists where helpful.
-        -external link placeholders (e.g., [link text](URL), Add external valid links only) to enhance authority.
+        -external link placeholders (e.g., [link text](External Link), Add external valid links only) to enhance authority.
         -Conclusion with a clear call-to-action or summary.
         -Title tag, meta description (150–160 characters), and URL slug reflecting primary keywords.
         -Keyword density: use each SEO keyword at least once, but maintain readability.

@@ -125,6 +125,34 @@ def initialize_components(cfg: Dict[str, Any], repo_dir: Path) -> tuple:
     except Exception as e:
         raise AutoBlogError(f"Failed to initialize components: {str(e)}")
 
+def filteredContent(content: str) -> str:
+    """
+    Filter content to remove unwanted elements and some specific replacements.
+    Args:
+        content: Original content string
+    Returns:
+        Filtered content string
+    """
+    try:
+        # Remove tag like [STRING](URL) non http links
+        # This regex matches markdown links that do not start with http
+        content = re.sub(r'\[([^\]]+)\]\((?!http)[^\)]+\)', '', content)
+        
+        # Replace specific unwanted phrases
+        replacements = {
+            "Engadget is a web magazine with obsessive daily coverage of everything new in gadgets and consumer electronics": "Engadget",
+            "Ars Technica - All content": "Ars Technica"
+        }
+        
+        for old, new in replacements.items():
+            content = content.replace(old, new)
+        
+        return content.strip()
+    
+    except Exception as e:
+        raise JSONParsingError(f"Failed to filter content: {str(e)}")
+import re
+
 def process_rss_item(item: Any, ai_generator: Any, image_handler: Any, 
                     post_generator: Any, post_history: Any) -> Optional[tuple]:
     """
@@ -183,10 +211,11 @@ def process_rss_item(item: Any, ai_generator: Any, image_handler: Any,
                 logger.warning(f"Image processing failed, continuing without image: {str(e)}")
         
         # Create post
+        mdContent = filteredContent(generated_content.get('content', ''))
         post_path, automationData = post_generator.create_post(
             content_data={
                 'title': generated_content.get('title', item.title),
-                'content': generated_content.get('content', ''),
+                'content': mdContent,
                 'tags': generated_content.get('tags', []),
                 'meta_description': generated_content.get('meta_description', item.description),
                 'source_url': item.link,
