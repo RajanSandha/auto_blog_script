@@ -212,6 +212,7 @@ def process_rss_item(item: Any, ai_generator: Any, image_handler: Any,
         
         # Create post
         mdContent = filteredContent(generated_content.get('content', ''))
+        sourceName = filteredContent(item.source_name)
         post_path, automationData = post_generator.create_post(
             content_data={
                 'title': generated_content.get('title', item.title),
@@ -219,7 +220,7 @@ def process_rss_item(item: Any, ai_generator: Any, image_handler: Any,
                 'tags': generated_content.get('tags', []),
                 'meta_description': generated_content.get('meta_description', item.description),
                 'source_url': item.link,
-                'source_name': item.source_name,
+                'source_name': sourceName,
                 'categories': generated_content.get('categories', []),
                 'keywords': generated_content.get('keywords', [])
             },
