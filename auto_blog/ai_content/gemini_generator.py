@@ -53,29 +53,32 @@ class GeminiGenerator(AIGenerator):
         
         # Prepare the prompt
         prompt = f"""
-        You are a professional tech blog writer. Your job is to take the dynamic information provided below and decide whether it belongs in our niche (tech news, software, programming, AI, emerging technologies). Do not write about sales, price drops, Amazon deals, promotions, or unrelated topics.
+        You are a professional tech blog writer with expertise in creating unique, humanized, and friendly blog posts. Your task is to rewrite the provided article information into a well-structured, SEO-first blog post in markdown format. Ensure the content is engaging, forward-thinking, and adheres to the following guidelines:
 
-        If relevant_to_niche is true, produce a friendly, humanized, forward-thinking blog post of around {max_words} words in {style} style, optimized for SEO with all provided keywords, and structured according to best practices:
-
-        -HTML headings (<h2>, <h3>, etc.) and emphasis tags.
-        -Introduction that incorporates primary keywords naturally.
-        -Logical sectioning with H2 and H3 subheadings that reflect search intent.
-        -Short paragraphs, bullet points or numbered lists where helpful.
-        -external link placeholders (e.g., [link text](External Link), Add external valid links only) to enhance authority.
-        -Conclusion with a clear call-to-action or summary.
-        -Title tag, meta description (150–160 characters), and URL slug reflecting primary keywords.
-        -Keyword density: use each SEO keyword at least once, but maintain readability.
-        -If relevant_to_niche is false, return the JSON with empty strings or empty arrays for all fields except "relevant_to_niche": false.
-        -Always return only this JSON structure (no extra text):        
+        - Use a friendly and conversational tone while maintaining professionalism.
+        - Structure the blog post with proper markdown syntax, including:
+          - HTML headings (<h2>, <h3>, etc.) for logical sections.
+          - Emphasis tags for important points.
+          - Bullet points or numbered lists where appropriate.
+        - Write an introduction that naturally incorporates primary keywords and hooks the reader.
+        - Use logical sectioning with H2 and H3 subheadings that reflect search intent and improve readability.
+        - Keep paragraphs short and concise for better readability.
+        - Include placeholders for external links (e.g., [link text](External Link)) where relevant, but only if valid links are available.
+        - Conclude with a clear call-to-action or summary that leaves a lasting impression.
+        - Optimize the content for SEO by:
+          - Using each provided keyword at least once while maintaining readability.
+          - Writing a compelling title tag and meta description (150–160 characters) that reflect primary keywords.
+          - Suggesting a URL slug that aligns with the content and keywords.
+        - Ensure the blog post is relevant to our niche (tech news, software, programming, AI, emerging technologies). If the topic is not relevant, return the JSON with empty strings or empty arrays for all fields except "relevant_to_niche": false.
+        - Always return only this JSON structure (no extra text):        
         {{
             "title": "suggested SEO-optimized title or '' if not relevant",
-            "content": "full markdown blog post or "" if not relevant",
+            "content": "full markdown blog post or '' if not relevant",
             "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
-            "meta_description": "150–160 char SEO-friendly description or "" if not relevant",
+            "meta_description": "150–160 char SEO-friendly description or '' if not relevant",
             "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
             "categories": ["category1", "category2", "category3", "category4", "category5"],
             "relevant_to_niche": true  # Boolean: true if the topic is relevant to our niche (tech news, software, programming, AI, emerging technologies), false otherwise
-
         }}
         
         Here is the information about the article to rewrite:
