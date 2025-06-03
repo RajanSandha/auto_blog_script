@@ -137,6 +137,17 @@ def filteredContent(content: str) -> str:
         # Remove tag like [STRING](URL) non http links
         # This regex matches markdown links that do not start with http
         content = re.sub(r'\[([^\]]+)\]\((?!http)[^\)]+\)', '', content)
+
+        # Remove example.com links completely, including brackets if applied
+        content = re.sub(r'\[([^\]]+)\]\(https?://(?:www\.)?example\.com\)', r'\1', content)
+        content = re.sub(r'\bhttps?://(?:www\.)?example\.com\b', '', content)
+
+        # Also replace link text with correct replacement
+        content = re.sub(
+            r'\[link text\]\((https?://[^\)]+)\)',
+            r'[\1](\1)',
+            content
+        )
         
         # Replace specific unwanted phrases
         replacements = {
