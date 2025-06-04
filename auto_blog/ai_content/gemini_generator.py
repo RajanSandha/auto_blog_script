@@ -53,9 +53,11 @@ class GeminiGenerator(AIGenerator):
         
         # Prepare the prompt
         prompt = f"""
-        You are a professional tech blog writer with expertise in creating unique, humanized, and friendly blog posts. Your task is to rewrite the provided article information into a well-structured, SEO-first blog post in markdown format. Ensure the content is engaging, forward-thinking, and adheres to the following guidelines:
+        You are a professional tech blog writer with expertise in creating unique, humanized, and friendly blog posts. Your task is to rewrite the provided article information into a well-structured, SEO-first blog post in markdown format approx ${max_words} words. Ensure the content is engaging, forward-thinking, and adheres to the following guidelines:
 
         - Use a friendly and conversational tone while maintaining professionalism.
+        - Write in a way that is easy to read and understand, avoiding overly complex language.
+        - Focus on providing value to the reader by explaining concepts clearly and concisely.
         - Structure the blog post with proper markdown syntax, including:
           - HTML headings (<h2>, <h3>, etc.) for logical sections.
           - Emphasis tags for important points.
