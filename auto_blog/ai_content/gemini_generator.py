@@ -74,7 +74,7 @@ class GeminiGenerator(AIGenerator):
         - Ensure the blog post is relevant to our niche (tech news, software, programming, AI, emerging technologies). If the topic is not relevant, return the JSON with empty strings or empty arrays for all fields except "relevant_to_niche": false.
         - Always return only this JSON structure (no extra text):        
         {{
-            "title": "suggested SEO-optimized title or '' if not relevant",
+            "title": "55-60 char suggested SEO-optimized title or '' if not relevant",
             "content": "full markdown blog post or '' if not relevant",
             "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
             "meta_description": "150–160 char SEO-friendly description or '' if not relevant",
