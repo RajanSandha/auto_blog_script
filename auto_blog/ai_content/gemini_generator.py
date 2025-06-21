@@ -50,6 +50,7 @@ class GeminiGenerator(AIGenerator):
         categories = article_data.get('categories', [])
         source_url = article_data.get('link', '')
         source_name = article_data.get('source_name', '')
+        artical_image = article_data.get('image_url', '')
         
         # Prepare the prompt
         prompt = f"""
@@ -67,6 +68,7 @@ class GeminiGenerator(AIGenerator):
         - Keep paragraphs short and concise for better readability.
         - Include placeholders for external links (e.g., [link text](External Link)) where relevant, but only if valid links are available.
         - Conclude with a clear call-to-action or summary that leaves a lasting impression.
+        - Use image url if provided to make content more engaging.
         - Optimize the content for SEO by:
           - Using each provided keyword at least once while maintaining readability.
           - Writing a compelling title tag and meta description (150–160 characters) that reflect primary keywords.
@@ -88,6 +90,7 @@ class GeminiGenerator(AIGenerator):
         Source: {source_name}
         Original URL: {source_url}
         Original Description: {description}
+        Image URL: {artical_image if artical_image else 'Not provided'}
         Categories/Tags: {', '.join(categories) if categories else 'Not provided'}
         Original Content:
         {original_content[:6000]}  # Limit content length to fit within context window
