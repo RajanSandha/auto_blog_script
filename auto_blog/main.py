@@ -29,6 +29,7 @@ from .post_generator import PostGenerator
 from .github_manager import GitHubManager
 from .utils import create_directory, PostHistory
 from .webhook_handler import wehbook_handler
+from .scraper.sheets_handler import GoogleSheetsHandler
 # Set up logging
 log_dir = Path(__file__).parent.parent / "logs"
 create_directory(str(log_dir))
@@ -70,10 +71,17 @@ def initialize_components(cfg: Dict[str, Any], repo_dir: Path) -> tuple:
         )
         
         if not github_manager.ensure_repo_exists():
-            raise AutoBlogError("Failed to ensure repository exists")
+            raise AutoBlogError("Failed to ensure GitHub repository exists")
         
         if not github_manager.pull_latest_changes():
-            raise AutoBlogError("Failed to pull latest changes")
+            raise AutoBlogError("Failed to pull latest changes from GitHub")
+        
+        # Initialize URL tracking sheet handler
+        sheets_handler = GoogleSheetsHandler(
+            credentials_file=cfg.get('google_credentials_file'),
+            spreadsheet_id=cfg.get('spreadsheet_id'),
+            sheet_name=cfg.get('sheet_name', 'Sheet1')
+        )
         
         # Initialize post history tracker
         history_file = Path(__file__).parent.parent / "data" / "post_history.json"
@@ -120,7 +128,7 @@ def initialize_components(cfg: Dict[str, Any], repo_dir: Path) -> tuple:
         )
         
         return (github_manager, post_history, rss_fetcher, ai_generator, 
-                image_handler, post_generator)
+                image_handler, post_generator, sheets_handler)
                 
     except Exception as e:
         raise AutoBlogError(f"Failed to initialize components: {str(e)}")
@@ -268,21 +276,22 @@ def main():
         
         # Initialize components
         (github_manager, post_history, rss_fetcher, ai_generator,
-         image_handler, post_generator) = initialize_components(cfg, repo_dir)
+         image_handler, post_generator, sheets_handler) = initialize_components(cfg, repo_dir)
         
         # Fetch RSS feeds
         all_items = rss_fetcher.fetch_all_feeds()
         logger.info(f"Fetched {len(all_items)} items from RSS feeds")
 
-        # Get processed URLs from webhook data
-        webhook_processed_urls = wehbook_handler.call_webhook({
-            "action": "get",
-        }, os.getenv("WEBHOOK_DATA_LINK"))
-        logger.info(f"Got {len(webhook_processed_urls)} processed URLs from webhook")
+        # Get processed URLs from Google Sheet
+        processed_urls = sheets_handler.get_processed_urls()
+        logger.info(f"Got {len(processed_urls)} processed URLs from tracking sheet")
         
-        # Filter out items that have been processed according to webhook
-        unprocessed_items = wehbook_handler.filter_unprocessed_items(all_items, webhook_processed_urls)
-        logger.info(f"{len(unprocessed_items)} items remaining after webhook filter")
+        # Filter out items that have been processed
+        unprocessed_items = [
+            item for item in all_items 
+            if item.link not in processed_urls
+        ]
+        logger.info(f"{len(unprocessed_items)} items remaining after filter")
                 
         if not unprocessed_items:
             logger.info("No new articles to process")
@@ -345,7 +354,6 @@ def main():
         
         # Update post history and commit changes
         if processed_urls:
-            
             current_date = datetime.now().strftime('%Y-%m-%d')
             commit_message = f"Add {len(created_post_paths)} new blog post(s) for {current_date}"
             
@@ -353,12 +361,9 @@ def main():
                 logger.error("Failed to commit and push changes")
                 return
 
+            # Add processed URLs to tracking sheet
             for url in processed_urls:
-                #Add processed urls to webhook data
-                wehbook_handler.call_webhook({
-                    "action": "set",
-                    "source_link": url
-                }, os.getenv("WEBHOOK_DATA_LINK"))
+                sheets_handler.add_processed_url(url)
 
         logger.info("Automated blog system completed successfully")
         

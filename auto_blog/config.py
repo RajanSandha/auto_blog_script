@@ -78,6 +78,11 @@ SITE_URL = get_env_value('SITE_URL', f'https://{GITHUB_USERNAME}.github.io')
 # Webhook Settings
 WEBHOOK_DATA_LINK = get_env_value('WEBHOOK_DATA_LINK', '')
 
+# Scraper Settings
+SPREADSHEET_ID=get_env_value('SPREADSHEET_ID', 'your_spreadsheet_id_here')
+SHEET_NAME=get_env_value('SHEET_NAME', 'ProcessedURLs')
+GOOGLE_CREDENTIALS_FILE=get_env_value('GOOGLE_CREDENTIALS_FILE', 'path/to/your/credentials.json')       
+
 def validate_config() -> List[str]:
     """
     Validate the loaded configuration.
@@ -148,5 +153,10 @@ def get_config() -> Dict[str, Any]:
         'site_url': SITE_URL,
 
         # Webhook Settings
-        'webhook_data_link': WEBHOOK_DATA_LINK
+        'webhook_data_link': WEBHOOK_DATA_LINK,
+
+        # Scraper Settings
+        'spreadsheet_id': SPREADSHEET_ID,
+        'sheet_name': SHEET_NAME,
+        'google_credentials_file': GOOGLE_CREDENTIALS_FILE
     }

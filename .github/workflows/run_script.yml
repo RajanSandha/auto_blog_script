@@ -26,15 +26,29 @@ jobs:
         run: |
           pip install -r requirements.txt
 
+      - name: Set up Google credentials
+        run: |
+          echo '${{ secrets.GOOGLE_CREDENTIALS }}' | base64 --decode > credentials.json
+          # Verify the JSON is valid
+          python -c "import json; json.load(open('credentials.json'))"
+
       - name: Generate .env file
         run: |
           cat <<EOF > .env
+          # AI Provider Settings
           AI_PROVIDER=${{ secrets.AI_PROVIDER }}
           OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL=${{ secrets.OPENAI_MODEL }}
           GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL=${{ secrets.GEMINI_MODEL }}
+          
+          # RSS Settings
           RSS_FEEDS=${{ secrets.RSS_FEEDS }}
+          
+          # Google Sheets Configuration
+          GOOGLE_CREDENTIALS_FILE=credentials.json
+          GOOGLE_SHEET_ID=${{ secrets.GOOGLE_SHEET_ID }}
+          GOOGLE_SHEET_NAME=${{ secrets.GOOGLE_SHEET_NAME }}
           MAX_RSS_ITEMS=${{ secrets.MAX_RSS_ITEMS }}
           MAX_ARTICLE_AGE_DAYS=${{ secrets.MAX_RSS_ITEMS }}
           JEKYLL_CATEGORIES=${{ secrets.JEKYLL_CATEGORIES }}
@@ -67,6 +81,11 @@ jobs:
           OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
+          
+          # Google Sheets Configuration
+          GOOGLE_CREDENTIALS_FILE: credentials.json
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          GOOGLE_SHEET_NAME: ${{ secrets.GOOGLE_SHEET_NAME }}
           # RSS & Jekyll Config
           RSS_FEEDS: ${{ secrets.RSS_FEEDS }}
           MAX_RSS_ITEMS: ${{ secrets.MAX_RSS_ITEMS }}
@@ -89,3 +108,9 @@ jobs:
           WEBHOOK_DATA_LINK: ${{ secrets.WEBHOOK_DATA_LINK }}
         run: |
           python run.py
+
+      - name: Clean up sensitive files
+        if: always()
+        run: |
+          rm -f credentials.json
+          rm -f .env

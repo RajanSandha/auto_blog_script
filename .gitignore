@@ -39,3 +39,7 @@ github_repo/_site/
 github_repo/.sass-cache/
 github_repo/.jekyll-metadata
 github_repo/.jekyll-cache/
+
+
+#exclude specific files
+gen-lang-client.json
