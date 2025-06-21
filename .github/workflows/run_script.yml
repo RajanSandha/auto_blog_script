@@ -28,7 +28,7 @@ jobs:
 
       - name: Set up Google credentials
         run: |
-          echo '${{ secrets.GOOGLE_CREDENTIALS }}' | base64 --decode > credentials.json
+          echo '${{ secrets.GOOGLE_CREDENTIALS_FILE }}' | base64 --decode > credentials.json
           # Verify the JSON is valid
           python -c "import json; json.load(open('credentials.json'))"
 
@@ -47,8 +47,8 @@ jobs:
           
           # Google Sheets Configuration
           GOOGLE_CREDENTIALS_FILE=credentials.json
-          GOOGLE_SHEET_ID=${{ secrets.GOOGLE_SHEET_ID }}
-          GOOGLE_SHEET_NAME=${{ secrets.GOOGLE_SHEET_NAME }}
+          SPREADSHEET_ID=${{ secrets.SPREADSHEET_ID }}
+          SHEET_NAME=${{ secrets.SHEET_NAME }}
           MAX_RSS_ITEMS=${{ secrets.MAX_RSS_ITEMS }}
           MAX_ARTICLE_AGE_DAYS=${{ secrets.MAX_RSS_ITEMS }}
           JEKYLL_CATEGORIES=${{ secrets.JEKYLL_CATEGORIES }}
@@ -84,8 +84,8 @@ jobs:
           
           # Google Sheets Configuration
           GOOGLE_CREDENTIALS_FILE: credentials.json
-          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
-          GOOGLE_SHEET_NAME: ${{ secrets.GOOGLE_SHEET_NAME }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          SHEET_NAME: ${{ secrets.SHEET_NAME }}
           # RSS & Jekyll Config
           RSS_FEEDS: ${{ secrets.RSS_FEEDS }}
           MAX_RSS_ITEMS: ${{ secrets.MAX_RSS_ITEMS }}
