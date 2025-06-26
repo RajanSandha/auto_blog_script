@@ -52,23 +52,22 @@ class GeminiGenerator(AIGenerator):
         source_name = article_data.get('source_name', '')
         artical_image = article_data.get('image_url', '')
         
+        #ToDo:  Add following prompt parameters to the prompt
+        # -Suggest at least one internal link to a related article (use a placeholder if needed, e.g. [Related Article](Internal Link)).
+
         # Prepare the prompt
         prompt = f"""
-        You are a professional tech blog writer with expertise in creating unique, humanized, and friendly blog posts. Your task is to rewrite the provided article information into a well-structured, SEO-first blog post in markdown format approx ${max_words} words. Ensure the content is engaging, forward-thinking, and adheres to the following guidelines:
+        You are a professional tech blog writer with expertise in creating unique, humanized, and friendly blog posts. Your task is to rewrite the provided article information into a well-structured, SEO-first blog post in markdown format of approximately {max_words} words. Ensure the content is engaging, forward-thinking, and adheres to the following guidelines:
 
-        - Use a friendly and conversational tone while maintaining professionalism.
-        - Write in a way that is easy to read and understand, avoiding overly complex language.
-        - Focus on providing value to the reader by explaining concepts clearly and concisely.
-        - Structure the blog post with proper markdown syntax, including:
-          - HTML headings (<h2>, <h3>, etc.) for logical sections.
-          - Emphasis tags for important points.
-          - Bullet points or numbered lists where appropriate.
-        - Write an introduction that naturally incorporates primary keywords and hooks the reader.
+        - Use a friendly, conversational, and professional tone.
+        - Focus on providing value by explaining concepts clearly and concisely.
+        - Provide unique insights, analysis, or predictions about the topic (not just a summary).
+        - Include at least one actionable takeaway or practical tip for readers.
+        - If possible, cite reputable sources or include expert commentary (real or simulated).
+        - Add a short FAQ section addressing common questions about the topic.
         - Use logical sectioning with H2 and H3 subheadings that reflect search intent and improve readability.
-        - Keep paragraphs short and concise for better readability.
-        - Include placeholders for external links (e.g., [link text](External Link)) where relevant, but only if valid links are available.
-        - Conclude with a clear call-to-action or summary that leaves a lasting impression.
-        - Use image url if provided to make content more engaging.
+        - Add a Key Takeaways or Summary section at the end.
+        - Add a short author bio at the end (use a placeholder if needed).
         - Optimize the content for SEO by:
           - Using each provided keyword at least once while maintaining readability.
           - Writing a compelling title tag and meta description (150–160 characters) that reflect primary keywords.
