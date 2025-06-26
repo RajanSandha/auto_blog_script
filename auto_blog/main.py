@@ -156,6 +156,9 @@ def filteredContent(content: str) -> str:
             r'[\1](\1)',
             content
         )
+
+        # Remove ``` blocks, including optional "markdown" after ```
+        content = re.sub(r'```(?:markdown)?[\s\S]*?```', '', content)
         
         # Replace specific unwanted phrases
         replacements = {
