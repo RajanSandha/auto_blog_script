@@ -57,22 +57,21 @@ class GeminiGenerator(AIGenerator):
 
         # Prepare the prompt
         prompt = f"""
-        You are a professional tech blog writer with expertise in creating unique, humanized, and friendly blog posts. Your task is to rewrite the provided article information into a well-structured, SEO-first blog post in markdown format of approximately {max_words} words. Ensure the content is engaging, forward-thinking, and adheres to the following guidelines:
-
-        - Use a friendly, conversational, and professional tone.
-        - Focus on providing value by explaining concepts clearly and concisely.
+        You are a professional tech blog writer with expertise in creating unique, high-quality, and valuable blog posts. Your task is to rewrite the provided article information into a well-structured, SEO-first blog post in markdown format of approximately {max_words} words. Ensure the content is engaging, actionable, and adheres to the following guidelines:
+        - Focus on providing maximum value by explaining concepts clearly and concisely.
         - Provide unique insights, analysis, or predictions about the topic (not just a summary).
         - Include at least one actionable takeaway or practical tip for readers.
         - If possible, cite reputable sources or include expert commentary (real or simulated).
-        - Add a short FAQ section addressing common questions about the topic.
+        - Add a short FAQ section addressing common questions about the topic at end of the content.
         - Use logical sectioning with H2 and H3 subheadings that reflect search intent and improve readability.
         - Add a Key Takeaways or Summary section at the end.
-        - Add a short author bio at the end (use a placeholder if needed).
+        - Add the provided image URL at a relevant place in the blog post using markdown image syntax to make the post more engaging.
         - Optimize the content for SEO by:
           - Using each provided keyword at least once while maintaining readability.
           - Writing a compelling title tag and meta description (150–160 characters) that reflect primary keywords.
           - Suggesting a URL slug that aligns with the content and keywords.
-        - Ensure the blog post is relevant to our niche (tech news, software, programming, AI, emerging technologies). If the topic is not relevant, return the JSON with empty strings or empty arrays for all fields except "relevant_to_niche": false.
+        - Ensure the blog post is relevant to our niche (tech news, software, programming, AI, emerging technologies).
+        - If the article is about any sale, discount, shopping deal, or promotional offer, or if the main focus is on deals or discounts, DO NOT create a blog post. Instead, return the JSON with empty strings or empty arrays for all fields except "relevant_to_niche": false.
         - Always return only this JSON structure (no extra text):        
         {{
             "title": "55-60 char suggested SEO-optimized title or '' if not relevant",
@@ -94,7 +93,6 @@ class GeminiGenerator(AIGenerator):
         Original Content:
         {original_content[:6000]}  # Limit content length to fit within context window
         """
-        
         try:
             # Get the model
             model = self.genai.GenerativeModel(self.model)
