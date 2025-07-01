@@ -57,7 +57,11 @@ class GeminiGenerator(AIGenerator):
 
         # Prepare the prompt
         prompt = f"""
-        You are a professional tech blog writer with expertise in creating unique, high-quality, and valuable blog posts. Your task is to rewrite the provided article information into a well-structured, SEO-first blog post in markdown format of approximately {max_words} words. Ensure the content is engaging, actionable, and adheres to the following guidelines:
+        You are a professional tech blog writer with expertise in creating unique, high-quality, and valuable blog posts. Your task is to rewrite the provided article information into a well-structured, SEO-first blog post in markdown format of approximately {max_words} words. 
+
+        IMPORTANT: Write in a clear, simple, and conversational style that is easy to read and understand for an average adult audience. Avoid jargon and complex sentences. Use short paragraphs, bullet points, and plain language wherever possible. Aim for a Flesch Reading Ease score of 60 or higher (average readability).
+
+        Ensure the content is engaging, actionable, and adheres to the following guidelines:
         - Focus on providing maximum value by explaining concepts clearly and concisely.
         - Provide unique insights, analysis, or predictions about the topic (not just a summary).
         - Include at least one actionable takeaway or practical tip for readers.
